@@ -13,6 +13,7 @@ wd <- "~/Documents/MEIOFAUNA_PAPER/INPUTS/"
 library(tidyverse)
 
 tax_f <- read_tsv(list.files(path = wd, pattern = 'taxonomy.tsv', full.names = T))
+
 ab_f <-  read_tsv(list.files(path = wd, pattern = 'table_100_80', full.names = T), skip = 1)
 
 nsamples <- ab_f %>% select_if(is.double) %>% ncol()
@@ -40,7 +41,7 @@ ab_f %>%
 Res <- function(x) { rowSums(!is.na(x)) }
 
 tax_f %>%
-  left_join(ab) %>%
+  # left_join(ab) %>%
   mutate(Resolution = Res(across(where(is.double)))) %>%
   separate(Taxon, sep = ";", into = into) %>% 
   mutate_at(into, funs(str_replace_all(., c("D_[0-9]__" = "", "D_1[0-9]__" = "", "Incertae Sedis"=NA_character_)))) -> tax_f
