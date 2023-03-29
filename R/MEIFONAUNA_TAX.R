@@ -12,40 +12,29 @@ wd <- "~/Documents/MEIOFAUNA_PAPER/INPUTS/"
 
 library(tidyverse)
 
-tax_f <- read_tsv(list.files(path = wd, pattern = 'taxonomy.tsv', full.names = T))
+tax_f <- read_tsv(list.files(path = wd, pattern = 'taxonomy.tsv$', full.names = T))
 
 ab_f <-  read_tsv(list.files(path = wd, pattern = 'table_100_80', full.names = T), skip = 1)
-
-nsamples <- ab_f %>% select_if(is.double) %>% ncol()
-
-into <- paste0("rank", 1:7)
-
-# ab <- as.data.frame(ab_f)
-# rownames(ab) <- ab_f$`#OTU ID`
-# ab$`#OTU ID` <- NULL
-# TotalAbundance <- rowSums(ab)
-
-Freq <- function(x){rowSums(x > 1)}
-
-ab_f %>%
-  mutate(
-  TotalAbundance = rowSums(across(where(is.double))),
-  Prevalence = Freq(across(where(is.double)))) %>% 
-  select(`Feature ID`, TotalAbundance, Prevalence) %>%
-  arrange(desc(Prevalence)) -> ab
 
 
 # CLEAN TAXONOMY
 # 
 
-Res <- function(x) { rowSums(!is.na(x)) }
+into <- paste0("rank", 0:9)
 
-tax_f %>%
-  # left_join(ab) %>%
-  mutate(Resolution = Res(across(where(is.double)))) %>%
+# Res <- function(x) { rowSums(!is.na(x)) }
+
+# "Unassigned","Incertae_Sedis", "uncultured", "Clade_*"
+
+tax_f <- tax_f %>%
+  select(-`Feature ID` , -Confidence) %>%
   separate(Taxon, sep = ";", into = into) %>% 
-  mutate_at(into, funs(str_replace_all(., c("D_[0-9]__" = "", "D_1[0-9]__" = "", "Incertae Sedis"=NA_character_)))) -> tax_f
+  mutate_at(into, funs(str_replace_all(., c("os__" = "", "[a-z]__" = "", 
+    "Incertae_Sedis" = NA_character_, "uncultured" = NA_character_, "Unassigned"=NA_character_))))
 
+# "uncultured" = NA_character_
+# "Incertae Sedis"=NA_character_
+# mutate(Resolution = Res(across(where(is.double)))) %>%
 
 # RESOLUTION PER TAXON ----
 # CUANTOS TAXONES DIFERENTES POR RANK
@@ -67,19 +56,130 @@ features <- c(nrow(tax) - table(res))
 
 pct <- c(features / nrow(tax))
 
-data.frame(into, features, pct) %>%
+caption <- "V9-SSURef_NR99-138.1"
+
+df1 <- data.frame(into, features, pct, g = caption)
+
+df1 %>%
   mutate(into = factor(into, levels = into)) %>%
   ggplot(aes(x = into, y = features)) +
   geom_path(size = 1.5, alpha=0.6, group = 1) +
   geom_point(size = 3, alpha=0.6) +
   geom_text(aes(label = paste0(round(pct*100, digits = 2), "%")), 
     size = 4, vjust = -1, family = "GillSans") +
-  labs(y = "Number of features", x = '', subtitle = 'Features with taxonomic assignation') +
+  scale_y_continuous(labels = scales::comma) +
+  labs(y = "Number of features", x = '', subtitle = 'Features with taxonomic assignation', caption = caption) +
   theme_bw(base_size = 20, base_family = "GillSans") -> ps 
 
 ps + theme(panel.border = element_blank()) -> ps
 
 ps
+
+
+# 2) ----
+# Which asvs does not assign to V9-SSURef_NR99-138.1 as reference
+# corte a Class
+
+
+tax_f %>% count(rank0)
+
+tax_f %>% 
+  pivot_longer(cols = all_of(into), values_to = "Taxon") %>%
+  # filter(name == "rank1") %>%
+  drop_na(Taxon) %>%
+  count(name, Taxon) %>% view()
+
+
+# 3) -----
+# how many taxa-groups of interest
+
+c(NON_EUK, PHYLA)
+
+find_obs_tax <- function(filter_list = ..., tax_df, ...) {
+  
+  # tax_df %>% filter_at(vars(into), any_vars(grepl(w_filter, .)))
+  
+  filter_list <- str_to_lower(filter_list)
+  
+  w_filter <- sort(filter_list)
+  
+  w_filter <- paste(w_filter, collapse = "|")
+  
+  into <- tax_df %>% select_if(is.character) %>% names()
+  
+  # 1) Find obs taxon groups
+
+  tax_df %>% 
+    pivot_longer(cols = all_of(into), values_to = "Taxon") %>%
+    mutate(Taxon = str_to_lower(Taxon)) %>%
+    filter(grepl(w_filter, Taxon)) %>%
+    count(name, Taxon) -> taxon_obs_df
+  
+  
+  taxon_obs_df %>% pull(Taxon) -> taxon_obs
+  
+  # 2) Which taxon groups are not present in the df
+  
+  taxon_obs <- sort(taxon_obs)
+  
+  taxon_obs <- paste(taxon_obs, collapse = "|")
+  
+  taxon_non_obs <- filter_list[!grepl(taxon_obs, filter_list)] 
+  
+  taxon_non_obs_df <- data.frame(name = "none", Taxon = taxon_non_obs, n = 0)
+  
+  out <- rbind(taxon_obs_df, taxon_non_obs_df) %>%
+    filter(grepl(w_filter, Taxon))
+  
+  out$Taxon <- str_to_sentence(out$Taxon)
+  
+  return(out)
+  
+}
+
+find_obs_tax(c(NON_EUK, PHYLA), tax_f) %>% view()
+
+# add comparsing w/ previous
+
+# into <- c("domain", "kingdom", "phylum", "class", "order", "suborder", "family", "genus", "specie")
+
+into <- paste0("rank", 1:9)
+
+taxprev <- read_tsv(list.files(path = wd, pattern = 'taxonomy.tsv.bkp', full.names = T)) %>%
+  separate(Taxon, sep = ";", into = into) %>% 
+  mutate_at(into, funs(str_replace_all(., c("D_[0-9]__" = "", "D_1[0-9]__" = "", "Incertae Sedis"=NA_character_, "uncultured" = NA_character_)))) %>%
+  select(into)
+
+caption <- "SILVA 132 18S SSU"
+
+tail(resprev <- rowSums(!is.na(taxprev))) # max.rank - 
+
+featuresprev <- c(nrow(taxprev) - table(resprev))
+
+pctprev <- c(featuresprev / nrow(taxprev))
+
+data.frame(into, featuresprev, pctprev)
+
+df2 <- data.frame(into, featuresprev, pctprev, g = caption)
+names(df2) <- names(df1)
+
+
+rbind(df1, df2) %>%
+  mutate(into = factor(into, levels = paste0("rank", 1:9))) %>%
+  ggplot(aes(x = into, y = features, color = g, group = g)) +
+  geom_path(size = 1.5, alpha=0.6) +
+  geom_point(size = 3, alpha=0.6) +
+  geom_text(aes(label = paste0(round(pct*100, digits = 2), "%")), 
+    size = 4, vjust = -1, family = "GillSans") +
+  scale_y_continuous(labels = scales::comma) +
+  labs(y = "Number of features", x = '', subtitle = 'ASVs with taxonomic assignation') +
+  theme_bw(base_size = 20, base_family = "GillSans") -> ps 
+
+ps + theme(panel.border = element_blank(), legend.position = "top") +
+  guides(color=guide_legend("",nrow=1)) -> ps
+
+ps
+  
 
 
 # (OMIT ) fill ----
@@ -225,3 +325,21 @@ names_ <- names2worms_(query)
 names_ %>% filter(Kingdom_wm %in% 'Animalia') %>% 
   drop_na(Phylum_wm) %>% distinct(ori_name) %>%
   pull() -> marineMetazoa
+
+# nsamples <- ab_f %>% select_if(is.double) %>% ncol()
+
+
+# ab <- as.data.frame(ab_f)
+# rownames(ab) <- ab_f$`#OTU ID`
+# ab$`#OTU ID` <- NULL
+# TotalAbundance <- rowSums(ab)
+
+Freq <- function(x){rowSums(x > 1)}
+
+ab_f %>%
+  mutate(
+    TotalAbundance = rowSums(across(where(is.double))),
+    Prevalence = Freq(across(where(is.double)))) %>% 
+  select(`Feature ID`, TotalAbundance, Prevalence) %>%
+  arrange(desc(Prevalence)) -> ab
+
