@@ -210,6 +210,13 @@ qiime feature-classifier extract-reads \
     
 # Saved FeatureData[Sequence] to: pr2_version_4.14.0_SSU-seqs-euk-derep-uniq.qza
 # Saved FeatureData[Taxonomy] to: pr2_version_4.14.0_SSU_tax-derep-uniq.qza
+
+# IMPORT
+qiime tools export --input-path pr2_version_4.14.0_SSU-seqs-euk-derep-uniq-1389f-1510r.qza --output-path pr2_version_4.14.0_SSU
+
+# 2) Fasta
+qiime tools export --input-path SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r.qza --output-path SSURef_NR99-138.1
+
     
 ```
 
@@ -310,7 +317,16 @@ qiime feature-classifier extract-reads \
 qiime rescript evaluate-seqs \
     --i-sequences SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r.qza \
     --o-visualization SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r.qzv
- 
+    
+# IMPORT V9 FILE
+
+# FASTA
+
+ qiime tools export --input-path SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r.qza --output-path SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r
+
+# 2) Fasta
+qiime tools export --input-path SSURef_NR99-138.1-tax.qza --output-path SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r
+
 ```
 
 ## Train the Classify (sklearn)
@@ -326,11 +342,22 @@ qiime feature-classifier fit-classifier-naive-bayes \
 ```
 
 ## Classify
+https://btep.ccr.cancer.gov/docs/qiime2/Lesson4/
 ```bash
 qiime feature-classifier classify-sklearn \
   --i-classifier classifier.qza \
-  --i-reads reference-reads.qza \
-  --o-classification taxonomy.qza  
+  --i-reads dna-sequences.qza \
+  --o-classification dna-sequences-taxonomy.qza  
+
+# Summary res
+
+qiime metadata tabulate \
+  --m-input-file dna-sequences-taxonomy.qza \
+  --o-visualization dna-sequences-taxonomy.qzv
+  
+# And import
+
+qiime tools export --input-path dna-sequences-taxonomy.qza --output-path taxonomy_dir
 
 ```
 
