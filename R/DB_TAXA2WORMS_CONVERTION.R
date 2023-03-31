@@ -15,12 +15,20 @@ library(rstatix)
 path <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/DB_COMPARISON"
 
 
-db2_f <- list.files(path = path, pattern = "pr2_version_4.14.0_SSU-1389f-1510r.rds", full.names = T)
-db1_f <- list.files(path = path, pattern = "SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r.rds", full.names = T)
+db1_f <- list.files(path = path, pattern = "SSURef_NR99-138.1-dna-seqs-derep-uniq-1389f-1510r-db_processed.rds", full.names = T)
 
 
-db1 <- read_rds(db1_f) %>% select_at(vars(contains("rank")))
-db2 <- read_rds(db2_f)  %>% select_at(vars(contains("rank")))
+db2_f <- list.files(path = path, pattern = "pr2_version_4.14.0_SSU-1389f-1510r-db_processed.rds", full.names = T)
+
+
+db1 <- read_rds(db1_f)
+
+
+
+# db2 <- read_rds(db2_f)  %>% select_at(vars(-contains(omit_cols)))
+
+# STACKS RANKS AS A SILVA =====
+
 
 # 1) Input Taxa-groups list ----
 
@@ -60,28 +68,71 @@ taxa_list <- c(NON_EUK, PHYLA)
 taxa_list <- str_to_lower(taxa_list)
 taxa_list <- paste(taxa_list, collapse = "|")
 
+# USING ACROSS AND UNNEST FORMAT
+# 2.1) PIVOT LONGER FORMAT ----
 
-into <- db1 %>% select_at(vars(contains("rank"))) %>% names()
+omit_cols <- c("Feature ID","dna_width")
 
-db1 <- db1 %>% 
+into <- db1 %>% select_at(vars(-contains(omit_cols))) %>% names()
+
+# OPTION 1, 
+# UNFILTERED RANKS RESULTED IN A SINGLE SET RESULT IN A SET OF 12,592 SEARCHES
+# FILTERED RANKS RESULTED IN A SET OF 3,197
+
+query_db <- db1 %>%
   mutate_at(vars(all_of(into)), funs(str_to_lower(.))) %>%
   filter_at(vars(all_of(into)), any_vars(grepl(taxa_list, .))) %>% 
   mutate_at(vars(all_of(into)), funs(str_to_sentence(.))) %>%
-  mutate_at(vars(all_of(into)), funs(gsub("[[:space:]]", "", .))) %>%
-  mutate_at(vars(into),  ~na_if(., "")) %>%
-  mutate_at(vars(into), funs(str_replace_all(., c("_" = " "))))
+  pivot_longer(all_of(into), values_to = "Taxon", names_to = "Rank") %>%
+  drop_na(Taxon) %>%
+  group_by(Rank, Taxon) %>%
+  summarise(across(`Feature ID`, .fns = list)) %>%
+  ungroup() %>% arrange(match(Rank, into)) %>%
+  distinct()
 
 
-which_rank <- "rank3"
+# OPTION 2) AS A SINGLE RANK
 
-query_db <- db1 %>% rename("Taxon"= which_rank) %>% distinct(Taxon) %>% drop_na()
+# which_rank <- "phylum"
 
-str(query <- query_db %>% pull())
+
+# query_db <- db1 %>% 
+#   mutate_at(vars(all_of(into)), funs(str_to_lower(.))) %>%
+#   filter_at(vars(all_of(into)), any_vars(grepl(taxa_list, .))) %>% 
+#   mutate_at(vars(all_of(into)), funs(str_to_sentence(.))) %>%
+#   rename("Taxon"= which_rank) %>%
+#   dplyr::select(`Feature ID`, Taxon) %>%
+#   group_by(Taxon) %>%
+#   summarise(n = length(`Feature ID`), across(`Feature ID`, .fns = list)) %>%
+#   distinct()
+
+# THEN
+
+query_db %>% 
+  unnest(`Feature ID`) %>%
+  pivot_wider(names_from = "Rank", values_from = "Name")
+
+
+db1 %>% filter(`Feature ID` %in% "L26517.1.1880")
+
+
+# 3) WORMS CONVERTION =====
+
+
+query_db_test <- query_db %>% sample_n(30)
+
+str(query <- query_db_test %>% pull(Taxon))
 
 
 names2wormsdf_ <- function(queries, accepted = FALSE, marine = TRUE) {
   
   # (Worms) An authoritative classification and catalogue of marine names
+  
+  which_fields <- c("AphiaID", "scientificname", "status", "rank", 
+    "valid_AphiaID", "valid_name", "valid_authority", 
+    "isMarine", "isBrackish", "isFreshwater", "isTerrestrial", "modified")
+  
+  
   
   require(taxize)
   
@@ -91,7 +142,18 @@ names2wormsdf_ <- function(queries, accepted = FALSE, marine = TRUE) {
   
   if(attributes(worms)$match == not_record) {
     
-    out <- data.frame(Taxon = queries, Rank = not_record, Wormsid = not_record, URI = not_record)
+    out <- data.frame(Taxon = queries, WormsRank = not_record, Wormsid = not_record, URI = not_record)
+    
+    # add emtpy wm_records
+    
+    df_fields <- data.frame(matrix(ncol = length(which_fields)))
+    
+    names(df_fields) <- which_fields
+    
+    df_fields[1,] <- "none"
+    
+    out <- cbind(out, df_fields)
+    
     
   } else {
     
@@ -105,7 +167,14 @@ names2wormsdf_ <- function(queries, accepted = FALSE, marine = TRUE) {
     
     names(rankLev) <- NULL
     
-    out <- data.frame(Taxon = queries, Rank = rankLev, Wormsid = ID, URI = URI)
+    out <- data.frame(Taxon = queries, WormsRank = rankLev, Wormsid = ID, URI = URI)
+    
+    # add emtpy wm_records
+    
+    df_fields <- get_wm_record(ID)
+    
+    out <- cbind(out, df_fields)
+
     
   }
   
@@ -113,8 +182,8 @@ names2wormsdf_ <- function(queries, accepted = FALSE, marine = TRUE) {
   return(out)
 }
 
-# Test:
-# names2wormsdf_(query[20], accepted = TRUE, marine = TRUE)
+# Example how to use::
+# names2wormsdf_(query[10], accepted = TRUE, marine = TRUE)
 
 names2wormsdf <- function(queries, ...) {
   
@@ -155,6 +224,9 @@ get_wm_record <- function(wormsid) {
     "valid_AphiaID", "valid_name", "valid_authority", 
     "isMarine", "isBrackish", "isFreshwater", "isTerrestrial", "modified")
 
+  # df_fields <- data.frame(matrix(ncol = length(which_fields)))
+  # names(df_fields) <- which_fields
+  # df_fields[1,] <- "none"
   
   # 2) Retrive records 
   
@@ -175,16 +247,13 @@ get_wm_record <- function(wormsid) {
 }
 
 # Example how to use:
-
-get_wm_record("22565")
-
+# get_wm_record("22565")
 
   
-df <- names2wormsdf(query,accepted = TRUE, marine = TRUE)
+df <- names2wormsdf(query, accepted = TRUE, marine = TRUE)
 
+df %>% as_tibble()
 
+query_db_test %>% left_join(df)
 
-
-
-
-db1 %>% left_join(names_, by = c("Taxon", "ori_name"))
+get_wm_record("130130") %>% view()
