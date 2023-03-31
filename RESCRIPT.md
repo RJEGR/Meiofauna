@@ -38,7 +38,7 @@ pip install git+https://github.com/bokulich-lab/RESCRIPt.git
 ## Download DB
 https://forum.qiime2.org/t/processing-filtering-and-evaluating-the-silva-database-and-other-reference-sequence-data-with-rescript/15494
 
-### SILVA
+### 1) SILVA
 The SILVA 138 SSU Ref NR 99 database has been downloaded using rescript plugging for subsequent data analysis (*SSURef_Nr99_tax_silva.fasta),
 
 ```bash
@@ -50,21 +50,11 @@ conda activate qiime2-2023.2
 
 qiime rescript --help
 
-# 1) Download db
+# 1) Download db and target rannks: domain phylum class order family genus
 
 target="SSURef_NR99"
 version="138.1"
 
-qiime rescript get-silva-data \
-    --p-version $version \
-    --p-target $target \
-    --p-include-species-labels \
-    --o-silva-sequences ${target}-${version}-rna-seqs.qza \
-    --o-silva-taxonomy ${target}-${version}-tax.qza
-    
-    
-# 2) 
-"class", "order", "family", "genus", "specie"
 qiime rescript get-silva-data \
     --p-version $version \
     --p-target $target \
@@ -220,7 +210,7 @@ qiime tools export --input-path SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-
     
 ```
 
-## Evaluate seqs and tax
+## (Optional) Evaluate seqs and tax
 ```bash
 # 1)
 qiime rescript evaluate-seqs \
@@ -234,7 +224,7 @@ qiime rescript evaluate-taxonomy \
 
 ```
 
-## FeatureData conversion (rna to dna)
+## 2) FeatureData conversion (rna to dna)
 If you'd like to be able to jump to steps that only take FeatureData[Sequence] as input you can convert your data to FeatureData[Sequence] like so:
 
 ```bash
@@ -243,16 +233,18 @@ qiime rescript reverse-transcribe \
     --o-dna-sequences SSURef_NR99-138.1-dna-seqs.qza
 ```
 
+## Optional cleaning
+Es algo de truco esta parte, nos interesa primero flankear el fragmento V9 (Paso "Make specific amplicon ...") y despues evaluar secuencias con nucleotidos redundantes (`cull-seqs`), remover secuencias cortas (`filter-seqs-length-by-taxon`) y grupos taxonomicos relevantes.
 
-##  (Optional) Filter out low-quality sequences
+###  (Optional) Filter out low-quality sequences
 ```bash
 qiime rescript cull-seqs \
     --i-sequences SSURef_NR99-138.1-dna-seqs.qza \
     --o-clean-sequences silva-138.1-ssu-nr99-seqs-cleaned.qza
 ```
 
+### Filter DB by Domain (not working properly)
 
-## Filter DB by Domain
 ```bash
 # Filtering sequences by taxonomy
 # One or more of the following filter settings are required: min_lens, max_lens.
@@ -267,28 +259,30 @@ qiime rescript filter-seqs-length-by-taxon \
     --o-filtered-seqs SSURef_NR99-138.1-dna-seqs-euk.qza \
     --o-discarded-seqs SSURef_NR99-138.1-dna-discarded-seqs-euk.qza
     
-    
+# 2) 
+
 qiime rescript filter-taxa \
     --i-taxonomy SSURef_NR99-138.1-tax.qza \
     --p-include Eukaryota \
     --o-filtered-taxonomy SSURef_NR99-138.1-tax-euk.qza
 ```
 
-## Dereplicate sequences
+## 3) Dereplicate sequences
 Using the default `uniq` approach. It will retain identical sequence records that have differing taxonomies ...
+
 ```bash
 qiime rescript dereplicate \
-    --i-sequences SSURef_NR99-138.1-dna-seqs-euk.qza \
+    --i-sequences SSURef_NR99-138.1-dna-seqs.qza \
     --i-taxa SSURef_NR99-138.1-tax.qza \
     --p-mode 'uniq' \
-    --o-dereplicated-sequences SSURef_NR99-138.1-dna-seqs-euk-derep-uniq.qza \
+    --o-dereplicated-sequences SSURef_NR99-138.1-dna-seqs-derep-uniq.qza \
     --o-dereplicated-taxa SSURef_NR99-138.1-tax-derep-uniq.qza
     
 # Saved FeatureData[Sequence] to: SSURef_NR99-138.1-dna-seqs-euk-derep-uniq.qza
 # Saved FeatureData[Taxonomy] to: SSURef_NR99-138.1-tax-derep-uniq.qza
 ```
 
-## Make specific amplicon-region  DB
+## 4) Make specific amplicon-region  DB
 generate an amplicon-specific DB  for more robust taxonomic classification of your data (Werner et al. 2011, Bokulich et al. 2018).
 
 (From the manuscript) Following the Earth Microbiome Project, the V9 region (~260 pb) of the minor subunit of the ribosomal RNA gene (18S SSU rRNA) was amplified with Euk_1389f (TTGTACACACCGCCC) and Euk_1510r (CCTTCYGCAGGTTCACCTAC) primers. Sequencing of amplicons was completed on an Illumina HiSeq 2500 instrument to produce 250 bp paired-end reads. Roche adapters (shown in bold) and the “barcodes” or 5-base keys (shown as X's) for distinguishing between samples on a single 454 run are detailed in the table. Our 1380F, 1389F and 1510R V9 primers were synthesized at Invitrogen (Carlsbad, CA), HPLC or cartridge purified and engineered with 5 base keys, avoiding the use of a C at the terminal position of the key preceding the 1380F primer.
@@ -303,13 +297,13 @@ generate an amplicon-specific DB  for more robust taxonomic classification of yo
 # the primer pair are botu, 1389 F 5′-TTGTACACACCGCCC-3′ and 1510 R 5′-CCTTCYGCAGGTTCACCTAC-3′ 
 # 
 qiime feature-classifier extract-reads \
-    --i-sequences SSURef_NR99-138.1-dna-seqs-euk-derep-uniq.qza \
+    --i-sequences SSURef_NR99-138.1-dna-seqs-derep-uniq.qza \
     --p-f-primer TTGTACACACCGCCC \
     --p-r-primer CCTTCYGCAGGTTCACCTAC \
     --p-identity 0.7 \
     --p-n-jobs 2 \
     --p-read-orientation 'forward' \
-    --o-reads SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r.qza
+    --o-reads SSURef_NR99-138.1-dna-seqs-derep-uniq-1389f-1510r.qza
     
 # 2)
 
@@ -322,14 +316,14 @@ qiime rescript evaluate-seqs \
 
 # FASTA
 
- qiime tools export --input-path SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r.qza --output-path SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r
+qiime tools export --input-path SSURef_NR99-138.1-dna-seqs-derep-uniq-1389f-1510r.qza --output-path SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r_dir
 
-# 2) Fasta
-qiime tools export --input-path SSURef_NR99-138.1-tax.qza --output-path SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r
+# 2) TAXA
+qiime tools export --input-path SSURef_NR99-138.1-tax-derep-uniq.qza --output-path SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r_dir
 
 ```
 
-## Train the Classify (sklearn)
+## 5) Train the Classify (sklearn)
 ```bash
 ln -s /Users/cigom/Documents/MEIOFAUNA_PAPER/RESCRIPT/SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r.qza reference-reads.qza
 
@@ -341,7 +335,7 @@ qiime feature-classifier fit-classifier-naive-bayes \
   --o-classifier classifier.qza
 ```
 
-## Classify
+## 6) Classify
 https://btep.ccr.cancer.gov/docs/qiime2/Lesson4/
 ```bash
 qiime feature-classifier classify-sklearn \
