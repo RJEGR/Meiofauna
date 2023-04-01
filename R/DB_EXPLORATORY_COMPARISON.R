@@ -123,6 +123,13 @@ rbind(df1, df2) %>%
   pivot_wider(names_from = "DB", values_from = "n") %>% 
   view()
 
+
+rbind(df1, df2) %>%
+  filter(Taxon %in% c(NON_EUK, PHYLA)) %>% 
+  select(-name) %>% 
+  pivot_wider(names_from = "DB", values_from = "n") %>%
+  view()
+
 # 3) Filtering non assigned ASVS =====
 
 
