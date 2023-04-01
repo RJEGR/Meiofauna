@@ -59,7 +59,7 @@ into <- c("domain", "phylum", "class", "order", "family", "genus", "specie")
 
 tax_df <- tax %>%
   filter(grepl("Eukaryota", Taxon)) %>% # 22,794
-  separate(Taxon, sep = ";", into = into) %>% 
+  separate(Taxon, sep = ";", into = into) %>% view()
   mutate_at(into, funs(str_replace_all(., c("os__" = "", "[a-z]__" = "", 
     "_sp."=NA_character_, "metagenome"=NA_character_,
     "Incertae_Sedis" = NA_character_, "uncultured" = NA_character_, "Unassigned"=NA_character_)))) %>%
@@ -104,7 +104,7 @@ path <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/"
 
 subpath <- paste0(path, "/pr2_version_4.14.0_SSU")
 
-tax_f <- list.files(path = subpath, pattern = "taxonomy.tsv", full.names = T)
+tax_f <- list.files(path = path, pattern = "taxonomy.tsv", full.names = T)
 dna_f <- list.files(path = subpath, pattern = "dna-sequences.fasta", full.names = T)
 
 dna <- Biostrings::readDNAStringSet(dna_f) # From pr2_version_4.14.0_SSU: 36,687 V9 reads
@@ -116,6 +116,7 @@ IDS <- sapply(strsplit(IDS, " "), `[`, 1)
 length(unique(IDS))
 
 head(IDS <- sort(IDS))
+
 
 nrow(tax <- read_tsv(tax_f, col_names = T) %>% filter(`Feature ID` %in% IDS)) # Must be 36,687 groups
 
