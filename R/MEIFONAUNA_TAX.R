@@ -6,13 +6,13 @@ if(!is.null(dev.list())) dev.off()
 options(stringsAsFactors = FALSE, readr.show_col_types = FALSE)
 
 wd <- "~/Documents/MEIOFAUNA_PAPER/INPUTS/"
-
+subdir <- paste0(wd, "CURATED_DB_DIR")
 # library(Biostrings)
 # library(rstatix)
 
 library(tidyverse)
 
-tax_f <- read_tsv(list.files(path = wd, pattern = 'taxonomy.tsv$', full.names = T))
+tax_f <- read_tsv(list.files(path = subdir, pattern = 'taxonomy.tsv$', full.names = T))
 
 ab_f <-  read_tsv(list.files(path = wd, pattern = 'table_100_80', full.names = T), skip = 1)
 
