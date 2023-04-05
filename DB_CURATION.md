@@ -20,12 +20,14 @@ This markdown summary the process used to curated and enrich sequences from 18S 
 ```bash
 conda activate qiime2-2023.2
 
+
 # 1)
 # qiime tools import --show-importable-formats
 # qiime tools import --show-importable-formats
 
 
-# HeaderlessTSVTaxonomyFormat
+# 1)
+
 qiime tools import \
   --type 'FeatureData[Taxonomy]' \
   --input-format  TSVTaxonomyFormat\
@@ -41,6 +43,7 @@ qiime tools import \
   --output-path CURATED-1389f-1510r_worms_sequences.qza
   
 # 3) Derep 
+
 qiime rescript dereplicate \
     --i-sequences CURATED-1389f-1510r_worms_sequences.qza \
     --i-taxa CURATED-1389f-1510r_worms_taxonomy.qza \
@@ -57,6 +60,9 @@ qiime feature-classifier fit-classifier-naive-bayes \
 
 # 5) Classify
 
+WD=/Users/cigom/Documents/MEIOFAUNA_PAPER/INPUTS
+cd $WD
+
 qiime feature-classifier classify-sklearn \
   --i-classifier CLASSIFIER.qza \
   --i-reads dna-sequences.qza \
@@ -64,7 +70,20 @@ qiime feature-classifier classify-sklearn \
 
 # EXPORT
 
-# Tax
 qiime tools export --input-path dna-sequences-taxonomy.qza --output-path CURATED_DB_DIR
+
+# Classi 2
+
+qiime feature-classifier classify-consensus-blast \
+  --i-query dna-sequences.qza \
+  --i-reference-reads CURATED-1389f-1510r_worms_derep_sequences.qza \
+  --i-reference-taxonomy CURATED-1389f-1510r_worms_derep_taxonomy.qza \
+  --o-classification dna-sequences-classify-consensus-blast-tax.qza \
+  --o-search-results dna-sequences-classify-consensus-blast-results.qza
+
+# EXPORT
+
+qiime tools export --input-path dna-sequences-classify-consensus-blast-tax.qza --output-path classify-consensus-blast_dir
+
 
 ```
