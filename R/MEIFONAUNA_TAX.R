@@ -81,9 +81,9 @@ ps
 # corte a Class
 
 
-tax_f %>% count(rank0)
+tax %>% count(k)
 
-tax_f %>% 
+tax %>% 
   pivot_longer(cols = all_of(into), values_to = "Taxon") %>%
   # filter(name == "rank1") %>%
   drop_na(Taxon) %>%
