@@ -11,14 +11,50 @@ library(Biostrings)
 library(tidyverse)
 
 # creates a llist than take the vector and fill rank gaps!!!
-llist <- function(x) {
-  x <- paste(x, sep = ';', collapse = ';')
-  x <- list(x)
-  x <- unlist(x)
+
+
+fill_ranks <- function(x) {
+  
+  # x: vector of ranks
+  # y: backbone of ranks
+  
+  y <- c("k","p", "c", "o", "f", "g", "s")
+  
+  # m <- matrix(ncol = length(y))
+  
+  m <- NULL
+  
+  for(i in length(y):1) { 
+    
+    searchrank <- grepl(paste0("^", y[i]), x)
+    
+    if(sum(searchrank) > 0) {
+      
+      pos <- which(searchrank)
+      
+      pos <- sample(pos, size = 1)
+      
+      rank <- x[pos]
+      
+      m[i] <- rank
+      
+    } else {
+      
+      rank <- paste0(y[i], "__")
+      
+      m[i] <- rank
+      
+    }
+    
+  }
+  
+  m <- paste0(unique(m), collapse = ";")
+  
+  return(m)
+  
 }
 
 # A) Load data  ====
-
 
 path <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/DB_COMPARISON"
 
@@ -34,10 +70,16 @@ query_db <- list.files(path = path, pattern = query_db_f, full.names = T)
 
 query_db <- read_rds(query_db)
 
+# query_db %>% left_join(db2worms) %>% view()
+
 
 # 1) FILTER WORMS   ====
 
 updated_query_db <- query_db %>% left_join(db2worms) %>% filter(status == "accepted")
+
+# IS MARINE? 
+
+db2worms %>% filter(status == "accepted") %>% count(isMarine)
 
 # updated_query_db %>% view()
 
@@ -46,7 +88,9 @@ updated_query_db <- query_db %>% left_join(db2worms) %>% filter(status == "accep
 
 into <- unique(updated_query_db$WormsRank)
 
-updated_query_db %>% filter(WormsRank != "not found") %>% count(WormsRank) %>% arrange(match(WormsRank, into)) %>% view()
+updated_query_db %>% filter(WormsRank != "not found") %>% 
+  count(WormsRank) %>% 
+  arrange(match(WormsRank, into)) %>% view()
 
 
 into <- unique(updated_query_db$Rank)
@@ -59,23 +103,21 @@ updated_query_db %>% filter(WormsRank != "not found") %>%  unnest(`Feature ID`) 
 recode_ranks <- c("phylum (division)" = "phylum","subphylum"= "phylum","infraphylum"= "phylum",
   "subclass" = "class", "superorder"="order")
 
-recode_ranks <- c("phylum (division)" = "pd","subphylum"= "ps","infraphylum"= "pi",
-  "subclass" = "class", "superorder"="order")
+ordered_ranks <- c("k","p", "c", "o", "f", "g", "s") # substr(unique(updated_query_db$Rank),1,1) #
 
-ordered_ranks <- unique(updated_query_db$Rank) # c("phylum", "class", "order", "family", "genus", "species")
-
-unique(updated_query_db$WormsRank)
 
 updated_query_db %>%
-  mutate(WormsRank = recode_factor(WormsRank, !!!recode_ranks)) %>%
-  mutate(WormsRank = factor(WormsRank, levels = ordered_ranks)) %>%
+  mutate(WormsRank = recode_factor(WormsRank, !!!recode_ranks)) %>% 
   unnest(`Feature ID`) %>%
   mutate_all(list(~ str_replace_all(., c("none" = NA_character_)))) %>%
-  drop_na(WormsRank) %>% view()
+  drop_na(WormsRank) %>% 
   group_by(`Feature ID`) %>%
-  distinct(WormsRank, valid_name) %>%
-  mutate(WormsRank = substr(WormsRank, 1,1), valid_name = paste0(WormsRank, "__", valid_name)) %>%  
-  summarise(across(valid_name, .fns = llist)) %>% view()
+  distinct(valid_name, WormsRank) %>%
+  mutate(valid_name = str_replace_all(valid_name, c(" " = "_"))) %>%
+  mutate(WormsRank = substr(WormsRank, 1,1), valid_name = paste0(WormsRank, "__", valid_name)) %>%
+  mutate(WormsRank = factor(WormsRank, levels = ordered_ranks)) %>%
+  filter(WormsRank %in% ordered_ranks) %>%
+  summarise(across(valid_name, .fns = fill_ranks)) %>%
   dplyr::rename("Taxon" = "valid_name") -> updated_query_db
 
 updated_query_db %>% view()
@@ -109,9 +151,15 @@ query_db <- read_rds(query_db)
 
 updated_query_db <- query_db %>% left_join(db2worms) %>% filter(status == "accepted") # 6,474 valid worms ids
 
+db2worms %>% filter(status == "accepted") %>% count(WormsRank)
+
 nrow(updated_query_db)
 
 # NUMBER OF CONVERTED TAXONS:
+
+into <- unique(updated_query_db$WormsRank)
+
+updated_query_db %>% filter(WormsRank != "not found") %>% count(WormsRank) %>% arrange(match(WormsRank, into)) %>% view()
 
 into <- unique(updated_query_db$Rank)
 
@@ -120,19 +168,32 @@ updated_query_db %>% filter(WormsRank != "not found") %>%  unnest(`Feature ID`) 
 
 # 2) CREATE TAX FORMAT =====
 
-unique(updated_query_db$WormsRank)
+# unique(updated_query_db$WormsRank)
 
-updated_query_db <- updated_query_db %>%
+recode_ranks <- c("infrakingdom"="kingdom", 
+  "phylum (division)" = "phylum","subphylum"= "phylum","infraphylum"= "phylum",
+  "subclass" = "class", "superorder"="order")
+
+f_ranks <- c("kingdom","phylum", "class", "order", "family", "genus", "species")
+
+ordered_ranks <- c("k","p", "c", "o", "f", "g", "s")
+
+updated_query_db %>%
+  mutate(WormsRank = recode_factor(WormsRank, !!!recode_ranks)) %>%
+  filter(WormsRank %in% f_ranks) %>%
   unnest(`Feature ID`) %>%
   mutate_all(list(~ str_replace_all(., c("none" = NA_character_)))) %>%
-  drop_na(WormsRank) %>%
+  drop_na(WormsRank) %>% 
   group_by(`Feature ID`) %>%
   distinct(WormsRank, valid_name) %>%
-  mutate(valid_name = paste0(WormsRank, "__", valid_name)) %>% # WormsRank = substr(WormsRank, 1,2), 
-  summarise(across(valid_name, .fns = llist)) %>%
-  dplyr::rename("Taxon" = "valid_name")
+  mutate(valid_name = str_replace_all(valid_name, c(" " = "_"))) %>%
+  mutate(WormsRank = substr(WormsRank, 1,1), valid_name = paste0(WormsRank, "__", valid_name)) %>%
+  # filter(WormsRank %in% ordered_ranks) %>%
+  mutate(WormsRank = factor(WormsRank, levels = ordered_ranks)) %>%
+  summarise(across(valid_name, .fns = fill_ranks)) %>% 
+  dplyr::rename("Taxon" = "valid_name") -> updated_query_db
 
-# C) CONTACT FILES ====
+# C) CONCAT FILES ====
 
 updated_query_db_out <- read_tsv(paste0(path, "/SSURef_NR99-138.1_V9_to_worms_taxonomy.tsv")) %>%
   rbind(.,updated_query_db)
@@ -141,7 +202,7 @@ nrow(updated_query_db_out) # 41,283
 
 # CHECK IF distinct FeatureIDS 
 
-updated_query_db_out %>% distinct(`Feature ID`) # 41,283
+nrow(updated_query_db_out %>% distinct(`Feature ID`)) # 41,283
 
 
 # 3 ) FILTER SEQUENCES ----
