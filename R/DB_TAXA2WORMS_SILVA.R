@@ -80,7 +80,7 @@ query_db <- db1 %>%
   mutate_at(vars(all_of(into)), list(~ str_to_lower(.))) %>%
   filter_at(vars(all_of(into)), any_vars(grepl(taxa_list, .))) %>% 
   mutate_at(vars(all_of(into)), list(~ str_to_sentence(.))) %>%
-  pivot_longer(all_of(into), values_to = "Taxon", names_to = "Rank") %>%
+  pivot_longer(all_of(into), values_to = "Taxon", names_to = "Rank") %>% 
   drop_na(Taxon) %>%
   group_by(Rank, Taxon) %>%
   summarise(across(`Feature ID`, .fns = list)) %>%
