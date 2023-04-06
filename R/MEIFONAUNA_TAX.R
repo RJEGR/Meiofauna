@@ -178,7 +178,11 @@ rbind(df1, df2) %>%
 ps + theme(panel.border = element_blank(), legend.position = "top") +
   guides(color=guide_legend("",nrow=1)) -> ps
 
-ps
+ggsavepath <- paste0(wd, '/Figures/')
+
+
+ggsave(ps, path = ggsavepath, 
+  filename = 'barplot_k.png', dpi = 300)
   
 
 
