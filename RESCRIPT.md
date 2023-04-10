@@ -179,7 +179,7 @@ qiime rescript evaluate-seqs \
 ```
 #### PR2: Prepare specific amplicon region DB
 ```bash
-# 1)
+# 1) DEREPLICATE
 qiime rescript dereplicate \
     --i-sequences pr2_version_4.14.0_SSU_seqs.qza \
     --i-taxa pr2_version_4.14.0_SSU_tax.qza \
@@ -187,7 +187,7 @@ qiime rescript dereplicate \
     --o-dereplicated-sequences pr2_version_4.14.0_SSU-seqs-euk-derep-uniq.qza \
     --o-dereplicated-taxa pr2_version_4.14.0_SSU_tax-derep-uniq.qza
     
-# 2)
+# 2) extract V9 reads
 
 qiime feature-classifier extract-reads \
     --i-sequences pr2_version_4.14.0_SSU-seqs-euk-derep-uniq.qza \
@@ -204,8 +204,8 @@ qiime feature-classifier extract-reads \
 # IMPORT
 qiime tools export --input-path pr2_version_4.14.0_SSU-seqs-euk-derep-uniq-1389f-1510r.qza --output-path pr2_version_4.14.0_SSU
 
-# 2) Fasta
-qiime tools export --input-path SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r.qza --output-path SSURef_NR99-138.1
+#
+qiime tools export --input-path pr2_version_4.14.0_SSU_tax.qza --output-path pr2_version_4.14.0_SSU
 
     
 ```
@@ -352,6 +352,16 @@ qiime metadata tabulate \
 # And import
 
 qiime tools export --input-path dna-sequences-taxonomy.qza --output-path taxonomy_dir
+
+# CLASS 2
+qiime feature-classifier classify-consensus-blast \
+  --i-query ../dna-sequences.qza \
+  --i-reference-reads /Users/cigom/Documents/MEIOFAUNA_PAPER/RESCRIPT/SSURef_NR99-138.1-dna-seqs-euk-derep-uniq-1389f-1510r.qza \
+  --i-reference-taxonomy /Users/cigom/Documents/MEIOFAUNA_PAPER/RESCRIPT/SSURef_NR99-138.1-tax-derep-uniq.qza \
+  --o-classification dna-sequences-classify-consensus-blast-tax.qza \
+  --o-search-results dna-sequences-classify-consensus-blast-results.qza
+
+qiime tools export --input-path dna-sequences-classify-consensus-blast-tax.qza --output-path classify-consensus-blast_dir
 
 ```
 
