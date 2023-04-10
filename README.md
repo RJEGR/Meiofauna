@@ -99,5 +99,7 @@ qiime tools export --input-path dna-sequences-classify-consensus-blast-tax.qza -
 
 # Figures
 ![Figure 1](https://github.com/RJEGR/Meiofauna/blob/main/Figures/Fig1.png)
+Figure 1.
 
 ![Figure 2](https://github.com/RJEGR/Meiofauna/blob/main/Figures/Fig2.png)
+Figure 2.
