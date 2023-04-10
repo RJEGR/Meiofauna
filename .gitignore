@@ -1,4 +1,5 @@
 
+R/NAMES2WORMS_TEMP_DIR
 R/.Rproj.user/FE839D4B/saved_source_markers
 .DS_Store
 R/.RData
@@ -37,3 +38,4 @@ R/.Rproj.user/FE839D4B/viewer-cache/F3EA96BC.Rdata
 R/.Rproj.user/shared/notebooks/patch-chunk-names
 R/.Rproj.user/shared/notebooks/paths
 R/R_PROJECT.Rproj
+.Rproj.user
