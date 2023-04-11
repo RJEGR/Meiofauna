@@ -11,17 +11,86 @@ library(tidyverse)
 
 ab_f <-  read_tsv(list.files(path = wd, pattern = 'table_100_80', full.names = T), skip = 1)
 
-mtd <- read_tsv(list.files(path = wd, pattern = 'mapping-file-corregido.tsv', full.names = T))
+mtd <- read_tsv(list.files(path = wd, pattern = 'mapping-file-corregido.tsv', full.names = T)) %>%
+  mutate(Region = factor(Region, levels = c("Yucatan", "NW Shelf", "NW Slope", "Deep-sea")))
 
-w_mtd <- c("#SampleID","Zone", "Description", "Profundidad", "Depth", "Region")
+w_mtd <- c("#SampleID", "Region") # "#SampleID","Zone", "Description", "Profundidad", "Depth", 
+
+  
+subdir <- paste0(wd, "classify-consensus-blast_dir")
+
+into <- c("k","p", "c", "o", "f", "g", "s")
+
+tax_f <- read_tsv(list.files(path = subdir, pattern = 'taxonomy.tsv$', full.names = T)) %>%
+  separate(Taxon, sep = ";", into = into) %>% 
+  mutate_at(vars(all_of(into)), list(~ str_replace_all(., c("[a-z]__" = "", "Unassigned"=NA_character_)))) %>%
+  mutate_at(vars(all_of(into)), list(~ gsub("[[:space:]]", "", .))) %>%
+  mutate_at(vars(all_of(into)),  ~na_if(., ""))
+ 
+
+# tax_gr_df <- read_csv(list.files(path = wd, pattern = 'RELEVANT_TAXON_GROUPS', full.names = T)) %>% select(Clade, Label)
+
+# 1) Input Taxa-groups list ----
+
+
+UNI_EUK <- c("Amoebozoa",
+  "Archaeplastida",
+  "Excavata",
+  "Fungi",
+  "Stramenopiles",
+  "Alveolata",
+  "Rhizaria")
+
+
+METAZOAN <- c(
+  "Annelida",
+  "Arthropoda",
+  "Brachiapoda",
+  "Bryozoa",
+  "Chordata",
+  "Cnidaria",
+  "Echinodermata",
+  "Gastrotricha",
+  "Gnathostomulida",
+  "Hemichordata",
+  "Kinorhyncha",
+  "Mollusca",
+  "Nematoda",
+  "Nemertea",
+  "Platyhelminthes",
+  "Porifera",
+  "Rotifera",
+  "Xenacoelomorpha")
+
+
+
+METAZOAN <- str_to_lower(paste(METAZOAN, collapse = "|"))
+UNI_EUK <- str_to_lower(paste(UNI_EUK, collapse = "|"))
+
+METAZOAN_DF <- tax_f %>%
+  mutate_at(vars(into), list(~ str_to_lower(.))) %>%
+  filter_at(vars(into), any_vars(grepl(METAZOAN, .))) %>%
+  mutate_at(vars(into), list(~ str_to_sentence(.))) %>%
+  mutate(Clade = "Metazoans")
+
+
+UNI_EUK_DF <- tax_f %>%
+  mutate_at(vars(into), list(~ str_to_lower(.))) %>%
+  filter_at(vars(into), any_vars(grepl(UNI_EUK, .))) %>%
+  mutate_at(vars(into), list(~ str_to_sentence(.))) %>%
+  mutate(Clade = "Unicellular eukaryotes")
+
+tax_f <- rbind(METAZOAN_DF,UNI_EUK_DF)
 
 # Color scale ----
 
-
 color_vector <- as.character(unique(mtd$Region))
+
 n <- length(color_vector)
 # getPalette <- RColorBrewer::brewer.pal(n, 'Set1')
+
 getPalette <- c("#4DAF4A", "#313695", "lightblue", "#E41A1C")
+
 
 axis_col <- structure(getPalette, names = color_vector)
 
@@ -30,44 +99,128 @@ axis_col <- structure(getPalette, names = color_vector)
 
 as_tibble(axis_col, rownames = "Region") %>%
   rename("axis_col" = "value") %>%
-  right_join(mtd, by = "Region") %>% 
+  right_join(mtd, by = "Region", multiple = "all") %>% 
   pull(axis_col, name = `#SampleID`) -> true_species_cols
 
 
 # mtd %>% view()
 
-# PCA -----
+# NMDS =====
+
 # https://www.davidzeleny.net/anadat-r/doku.php/en:pca_r
 
-data <- ab_f %>% select_if(is.double) 
+agglom_lev <- "k"
+
+which_sam <- ab_f %>% select_if(is.double) %>% names()
+
+# 1) Agglomerate data (best solution)
+
+data <- ab_f %>% 
+  right_join(tax_f, by = "Feature ID") %>%
+  # filter(Clade %in% "Metazoans") %>%
+  rename( "Level" = agglom_lev) %>%
+  group_by(Level) %>% 
+  summarise_at(vars(all_of(which_sam)), sum) %>%
+  drop_na(Level) %>% 
+  data.frame(., row.names = .$Level) %>%
+  select(-Level)
 
 # data <- vegan::decostand(data, method = "hellinger") # chord or hellinger
 
-PCA = prcomp(t(log10(data+1)), center = FALSE, scale. = FALSE)
+# data <- vegan::rda(data)
 
-percentVar <- round(100*PCA$sdev^2/sum(PCA$sdev^2),1)
+set.seed(202305)
 
-sd_ratio <- sqrt(percentVar[2] / percentVar[1])
+mMDS <- vegan::metaMDS(data, distance = "bray", k = 2, trymax = 1000)
 
-PCAdf <- data.frame(PC1 = PCA$x[,1], PC2 = PCA$x[,2])
-
-PCAdf %>%
-  mutate(`#SampleID` = rownames(.)) %>%
-  left_join(mtd %>% select(all_of(w_mtd))) -> PCAdf
+# cca_df <- vegan::cca(data, )
 
 
-PCAdf %>%
-  ggplot(., aes(PC1, PC2)) +
-  geom_point(aes(color = Region), size = 5, alpha = 0.7) +
-  labs(caption = '') +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+# vegan::stressplot(mMDS)
+  
+vegan::scores(mMDS, tidy = T) %>% 
+  as_tibble() %>% 
+  mutate(`#SampleID` = gsub("[.]","-", label)) %>% 
+  filter(!score %in% 'sites') %>%
+  left_join(mtd %>% select(all_of(w_mtd))) -> MDSdf
+
+vegan::scores(mMDS, tidy = T) %>% 
+  as_tibble() %>% 
+  filter(score %in% 'sites') -> MDSdf_sp
+
+ggplot() +
+  geom_point(data = MDSdf, aes(x = NMDS1, y = NMDS2, color = Region), size = 5, alpha = 0.7) +
   theme_bw(base_family = "GillSans", base_size = 16) +
   theme(plot.title = element_text(hjust = 0.5), legend.position = 'top') +
-  # coord_fixed(ratio = sd_ratio) +
   guides(color=guide_legend("",nrow=1)) +
-  scale_color_manual(values = axis_col) 
-  # see::scale_color_colorhex() 
+  scale_color_manual(values = axis_col) +
+  geom_text(data = MDSdf_sp, 
+    aes(x = NMDS1, y = NMDS2, label = label), 
+    family = "GillSans")
+
+# PCA =====
+# METAZOAN Euk (Meiofauna)
+
+tax_f %>% count(Clade)
+
+PCA_out <- function(ab_f, w_clade = ...) {
+  
+  data <- ab_f %>%
+    right_join(tax_f, by = "Feature ID") %>%
+    filter(Clade %in% w_clade) %>%
+    # rename( "Level" = agglom_lev) %>%
+    # drop_na(Level) %>%
+    # mutate_at(vars(all_of(which_sam)), function(x) {1E6 * x/sum(x)}) %>%
+    select_at(vars(all_of(which_sam), `Feature ID`)) %>%
+    data.frame(., row.names = .$`Feature ID`) %>%
+    select(-`Feature.ID`)
+  
+
+  PCA = prcomp(t(log2(data+1)), center = FALSE, scale. = FALSE)
+  
+  percentVar <- round(100*PCA$sdev^2/sum(PCA$sdev^2),1)
+  
+  sd_ratio <- sqrt(percentVar[2] / percentVar[1])
+  
+  PCAdf <- data.frame(PC1 = PCA$x[,1], PC2 = PCA$x[,2])
+  
+  PCAdf %>%
+    mutate(`#SampleID` = rownames(.)) %>%
+    mutate(`#SampleID` = gsub("[.]","-", `#SampleID`)) %>%
+    left_join(mtd %>% select(all_of(w_mtd))) %>%
+    mutate(Clade = w_clade) -> PCAdf
+  
+  
+  PCAdf %>%
+    ggplot(., aes(PC1, PC2)) +
+    facet_grid(~ Clade) +
+    geom_point(aes(color = Region), size = 5, alpha = 0.7) +
+    labs(caption = '') +
+    xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
+    ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+    theme_bw(base_family = "GillSans", base_size = 16) +
+    theme(plot.title = element_text(hjust = 0.5), legend.position = 'top') +
+    coord_fixed(ratio = sd_ratio) +
+    guides(color=guide_legend("",nrow=1)) +
+    scale_color_manual(values = axis_col)
+  
+  
+  # return(PCAdf)
+  
+}
+
+p1 <- PCA_out(ab_f, w_clade = "Unicellular eukaryotes")
+p2 <- PCA_out(ab_f, w_clade = "Metazoans")
+
+
+library(patchwork)
+ 
+psave <- p1 + p2 + plot_layout(guides = "collect") & theme(legend.position = 'top')
+
+ggsavepath <- paste0(wd, '/Figures/')
+
+ggsave(psave, path = ggsavepath, filename = 'PCA.png', device = png, width = 10, height = 10)
+
 
 # as distance tree -----
 
@@ -81,6 +234,7 @@ hc <- hclust(dist(dat, method = dist.method),
   method = linkage.method)
 
 dend <- hc %>% as.dendrogram()
+
 
 # Find special clusters:
 library(dynamicTreeCut)
@@ -123,40 +277,62 @@ legend("topleft", legend = names(axis_col), fill = axis_col)
 w_cols <- ab_f %>% select_if(is.double) %>% names()
 
 ab_f %>%
-  left_join(tax_f %>% select(`Feature ID`, rank3), by = "Feature ID") %>% 
+  left_join(tax_f, by = "Feature ID") %>% 
+  filter(Clade %in% "Metazoans") %>%
   pivot_longer(cols = all_of(w_cols), names_to = "#SampleID") %>%
   filter(value > 0) %>%
   left_join(mtd %>% select(all_of(w_mtd))) %>%
-  group_by(Region, Depth, rank3) %>% 
+  group_by(Region, p) %>% 
   summarise(value = sum(value)) %>% 
-  pivot_wider(names_from = rank3, values_from = value, values_fill = 0) %>%
+  mutate(value = log2(value + 1)) %>%
+  mutate(value = as.numeric(value)) %>%
+  pivot_wider(names_from = p, values_from = value, values_fill = 0) %>%
   # pivot_wider(names_from = Region, values_from = value, values_fill = 0) %>%
-  # pivot_wider(names_from = Depth, values_from = value, values_fill = 0) %>%
   ungroup() -> dat
 
-# top abundance ranks
 
-ab_f %>%
-    left_join(tax_f %>% select(`Feature ID`, rank3), by = "Feature ID") %>% 
-    pivot_longer(cols = all_of(w_cols), names_to = "#SampleID") %>%
-    filter(value > 0) %>%
-    left_join(mtd %>% select(all_of(w_mtd))) %>%
-    group_by(rank3) %>% summarise(value = sum(value))  %>% arrange(desc(value)) %>%
-    pull(rank3) %>% head(8)
+is.na(dat)
+
+dat %>% view()
 
 library(candisc)
 
-# data %>% filter(hpf == 108) -> dat
+# Ex
 
-wnames <- dat %>% select_if(is.double) %>% names()
+iris.mod <- lm(cbind(Petal.Length, Sepal.Length, Petal.Width, Sepal.Width) ~ Species, data=iris)
+iris.can <- candisc(iris.mod, data=iris)
 
-# mod <- lm(cbind(`0-100`,`100-200`,`200-500`,`500-1000`,`1000-1500`,`1500-2000`,`2000-2500`, `2500-3000`, `3000-3500`, `3500-4000`) ~ Region , data=dat)
 
-# mod <- lm(cbind(`Deep-sea`,`NW Shelf`,`NW Slope`,Yucatan) ~  Depth, data=dat)
 
-mod <- lm(cbind(`Nucletmycea`,`Holozoa`,`Chloroplastida`,`Alveolata`, `Rhizaria`, `Discoba`, `Stramenopiles`) ~  Region, data=dat)
+depVars <- dat %>% select_if(is.double) %>% names()
+
+indepVars <- "Region"
+
+form <- formula(paste('cbind(',
+  paste(depVars, collapse = ','),
+  ') ~ ',
+  paste(indepVars, collapse = '+')))
+
+mod <- lm(form, data=dat, na.action=na.exclude)
+
+# mod <- lm(cbind(Yucatan, `NW Shelf`, `NW Slope`,`Deep-sea`) ~  p, data=dat)
+
+car::Anova(mod, test="Wilks")
+
+# ERROR HERE ======
+
+manova <- Anova(mod, type = as.character(2))
 
 can <- candisc(mod, data = dat, term = 'Region', ndim = "2")
+
+
+can <- candisc(mod, data = dat, term = 'p', ndim = "2")
+
+
+
+# mod <- lm(cbind(`Annelida`,`Arthropoda`,`Bryozoa`,`Cephalochordata`, `Cnidaria`) ~  Region, data=dat)
+
+
 
 # heplot(candisc(mod, data = data, term = 'rank3', ndim = "1"))
 
