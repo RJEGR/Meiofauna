@@ -36,11 +36,10 @@ library(ggh4x)
 P <- sample_cor_long %>%
   ggplot(aes(x = LIBRARY_ID, y = name, fill = cor)) +  
   geom_tile(linewidth = 0.2) +
-  # ggsci::scale_fill_material(name = "", "blue-grey") +
-  # ggsci::scale_color_material(name = "", "blue-grey") +
+  ggsci::scale_fill_material(name = "", "indigo") +
   scale_x_discrete(position = 'bottom') +
   ggh4x::scale_y_dendrogram(hclust = hc_samples, position = "left", labels = NULL) +
-  guides(y.sec = guide_axis_manual(labels = hc_order, label_size = 5, label_family = "GillSans")) +
+  guides(y.sec = guide_axis_manual(labels = hc_order, label_size = 2.5, label_family = "GillSans")) +
   # ggh4x::scale_x_dendrogram(hclust = hc_samples, position = "top", labels = NULL) +
   theme_bw(base_size = 7, base_family = "GillSans") +
   labs(x = '', y = '') +
@@ -48,7 +47,7 @@ P <- sample_cor_long %>%
     legend.position = "bottom",
     # axis.text.x = element_blank(),
     # axis.ticks.x = element_blank(),
-    axis.text.x = element_text(angle = 90, hjust = 1, size = 5),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 2.5),
     strip.background = element_rect(fill = 'grey89', color = 'white'),
     panel.border = element_blank(),
     plot.title = element_text(hjust = 0),
@@ -90,7 +89,7 @@ topplot <- TOPDF %>%
   ggh4x::scale_x_dendrogram(hclust = hc_samples, position = 'top', labels = NULL) +
   # ggh4x::guide_dendro()
   # guides(x.sec = guide_axis_manual(labels = hc_order, label_size = 3.5)) +
-  guides(color = guide_legend(title = "", ncol = 2, )) +
+  guides(color = guide_legend(title = "", ncol = 4 )) +
   theme_bw(base_family = "GillSans", base_size = 7) +
   scale_color_manual(values = axis_col ) +
   theme(legend.position = 'top',
@@ -108,3 +107,29 @@ library(patchwork)
 psave <- topplot/ plot_spacer() /P + plot_layout(heights = c(0.6, -0.5, 5))
 
 ggsave(psave, filename = 'SAMPLE_HEATMAP.png', path = wd, width = 4, height = 4, device = png, dpi = 300)
+
+
+color_vector <- as.character(unique(MTD$Region))
+
+getPalette <- c("#4DAF4A", "#313695", "lightblue", "#E41A1C")
+
+axis_col <- structure(getPalette, names = color_vector)
+
+MTD %>% count(Depth) %>% pull(Depth)
+
+depthL <- c("0-100","100-200", "200-500",
+            "500-1000", "1000-1500", "1500-2000",
+            "2000-2500","2500-3000","3000-3500","3500-4000") 
+
+MTD %>% count(Depth , Region) %>% 
+  mutate(Depth = factor(Depth, levels = depthL)) %>%
+  ggplot(aes(x = Depth, y = n,color = Region)) +
+  geom_point(size = 4, shape = 1) +
+  # ggrepel::geom_label_repel(aes(label = n, size = 1)) +
+  guides(color = guide_legend(title = "", ncol = 4 )) +
+  theme_classic(base_family = "GillSans", base_size = 7) +
+  scale_color_manual(values = axis_col ) +
+  theme(legend.position = 'top') +
+  labs(y = "N samples") -> p
+
+ggsave(p, filename = 'SAMPLES-DEPTH.png', path = wd, width = 5, height = 4, device = png, dpi = 300)
