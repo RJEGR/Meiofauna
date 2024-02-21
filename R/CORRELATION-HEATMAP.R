@@ -69,7 +69,7 @@ P <- P + guides(
 # TOP
 
 TOPDF <- sample_cor_long %>%
-  distinct(LIBRARY_ID, Region ) %>%
+  distinct(LIBRARY_ID, Region, Depth  ) %>%
   # dplyr::mutate(hpf = dplyr::recode_factor(hpf, !!!recode_to)) %>%
   # mutate(label = ifelse(pH %in% "Low", "*", "")) %>%
   mutate(y = 1)
@@ -83,7 +83,7 @@ axis_col <- structure(getPalette, names = color_vector)
 
 
 topplot <- TOPDF %>%
-  ggplot(aes(y = y, x = LIBRARY_ID, color = as.factor(Region))) +
+  ggplot(aes(y = y, x = LIBRARY_ID, color = as.factor(Depth))) +
   geom_point(shape = 15, size = 2) +
   #geom_text(aes(label = label),  vjust = -0.7, hjust = 0.5, size = 1.5, family =  "GillSans", color = "#d73027") +
   ggh4x::scale_x_dendrogram(hclust = hc_samples, position = 'top', labels = NULL) +
