@@ -8,6 +8,8 @@ library(igraph)
 library(tidygraph)
 library(ggraph)
 
+path <- "~/MEIOFAUNA/INPUTS/"
+  
 exportNet <- function(TOMobj, moduleColors, threshold = 0.9) {
   
   nodeNames <- names(moduleColors)
@@ -16,7 +18,7 @@ exportNet <- function(TOMobj, moduleColors, threshold = 0.9) {
   
   # file_out <- gsub('.RData', '', basename(TOMFile))
   
-  file_out <- "WGCNA.mirs"
+  file_out <- "WGCNA.taxa"
   
   edgeFile <- paste0(path, "/",file_out, ".edges.txt")
   nodeFile <- paste0(path, "/",file_out, ".nodes.txt")
@@ -46,19 +48,18 @@ exportNet <- function(TOMobj, moduleColors, threshold = 0.9) {
   
 }
 
-# str(SORT_MIRS <- c("MIR-278","LET-7","MIR-133",
-#                    "Cluster_55760","Cluster_55776","MIR-2","MIR-315", "MIR-153", "BANTAM", "MIR-190", "MIR-2722", "MIR-1988", 
-#                    "MIR-92", "MIR-277B", "MIR-216"))
+# g <- exportNet(TOM, moduleColors, threshold = 0)
 
-# g <- exportNet(TOM, moduleColors, threshold = 0.3)
+file_out <- "WGCNA.taxa"
 
-g <- exportNet(TOM, moduleColors, threshold = 0)
+edgeFile <- paste0(path, "/",file_out, ".edges.txt")
+nodeFile <- paste0(path, "/",file_out, ".nodes.txt")
+
+
+g <- tidygraph::tbl_graph(nodes = read.delim(nodeFile), edges = read.delim(edgeFile), directed = FALSE)
+
 
 g <- g %>% activate("edges") %>% mutate(weight = ifelse(weight < 0.3, NA, weight)) %>% filter(!is.na(weight))
-
-moduleColors[names(moduleColors) %in% SORT_MIRS] %>% as_tibble(rownames = "Family") %>% view()
-
-# g1 <- g %>% activate("nodes") %>% 
 
 scale_col <- g %>% activate("nodes") %>% as_tibble() %>% distinct(`nodeAttr[nodesPresent, ]`) %>% pull()
 
@@ -67,7 +68,7 @@ g <- g %>% activate("nodes") %>%
          membership = igraph::cluster_louvain(., igraph::E(g)$weight)$membership,
          pageRank = page_rank(.)$vector)
 
-Levels <- c(module_members_2, module_members_1)
+Levels <- c("green", "blue", "turquoise", "brown", "yellow", "grey")
 
 g <- g %>% activate("nodes") %>%
   mutate(`nodeAttr[nodesPresent, ]` = factor(`nodeAttr[nodesPresent, ]`, levels = Levels))
@@ -79,15 +80,17 @@ ggraph(layout) +
   scale_color_manual('', values = structure(scale_col, names = scale_col) ) +
   geom_edge_arc(aes(edge_alpha = weight), strength = 0.1) + # edge_width
   geom_node_point(aes(color = `nodeAttr[nodesPresent, ]`, size = degree)) +
-  # ggrepel::geom_text_repel(data = layout, aes(x, y, label = nodeName), max.overlaps = 50, family = "GillSans") +
+  ggrepel::geom_text_repel(data = layout, aes(x, y, label = nodeName), max.overlaps = 50, family = "GillSans") +
   scale_edge_width(range = c(0.3, 1)) +
   theme_graph(base_family = "GillSans") +
   guides(fill=guide_legend(nrow = 2)) +
-  theme(legend.position = "none") +
+  theme(legend.position = "top") +
   coord_fixed() -> psleft
 
-# ggsave(psave, filename = 'WGCNA_MIRS2NETWORK.png', path = path, width = 10, height = 10, device = png, dpi = 300)
+ggsave(psleft, filename = 'WGCNA_TAX2NETWORK.png', path = path, width = 10, height = 10, device = png, dpi = 300)
 
+
+quit
 
 node_labs <- paste(LETTERS[1:length(Levels)], ") ", Levels, sep = "")
 names(node_labs) <- Levels
