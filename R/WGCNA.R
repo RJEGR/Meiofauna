@@ -24,6 +24,7 @@ datExpr <- phyloseq %>%
   prune_samples(sample_sums(.) > 0, .) %>%
   prune_taxa(taxa_sums(.) > 0, .) %>%
   aggregate_taxa(., "p") %>%
+  # transform_sample_counts(., function(x) x / sum(x)) %>%
   otu_table() %>%
   as("matrix")
 
@@ -45,19 +46,19 @@ if (!gsg$allOK) {
   datExpr= datExpr[gsg$goodSamples, gsg$goodGenes]
 }
 
-# When you have a lot of genes use the following code
-k=softConnectivity(datE=datExpr,power=6)
+# When you have a lot of rows in the matrix (ex. genes or taxons) use the following code
+k=softConnectivity(datE=datExpr,power=3)
 # Plot a histogram of k and a scale free topology plot
 sizeGrWindow(10,5)
 par(mfrow=c(1,2))
 hist(k)
 scaleFreePlot(k, main="Check scale free topology\n")
 
-max_power <- 20
+max_power <- 30
 
-powers = c(c(1:10), seq(from = 10, to = max_power, by=1)) 
+cat(powers <- c(c(1:10), seq(from = 10, to = max_power, by=1)))
 
-#powers = unique(powers)
+powers = unique(powers)
 
 allowWGCNAThreads()
 
@@ -122,17 +123,18 @@ enableWGCNAThreads()
 
 # specify network type
 # softPower <- 2
+
 adjacency <- adjacency(datExpr, 
                        power = softPower, 
                        type = "unsigned")
 
 
-TOM <- TOMsimilarity(adjacency, TOMType = "signed") # specify network type
+TOM <- TOMsimilarity(adjacency) # specify network type
 
 
 dissTOM = 1 - TOM
 
-heatmap(TOM)
+# heatmap(dissTOM) # if more than 100 rows, omit
 
 # Generate Modules ----
 # Generate a clustered gene tree
@@ -146,11 +148,13 @@ plot(geneTree, xlab="", sub="",
 
 minClusterSize <- 2
 
+cutHeight <- 0.6
+
 dynamicMods <- cutreeDynamic(dendro= geneTree, 
                              distM = dissTOM,
                              method = "hybrid",
                              deepSplit = 2, 
-                             cutHeight = 0.8,
+                             cutHeight = cutHeight,
                              pamRespectsDendro = FALSE,
                              minClusterSize = minClusterSize)
 
@@ -168,7 +172,7 @@ METree = flashClust(as.dist(MEDiss), method= "average")
 
 # Set a threhold for merging modules. In this example we are not merging so MEDissThres=0.0
 
-MEDissThres = 0.0
+MEDissThres = 0.8
 
 merge = mergeCloseModules(datExpr, dynamicColors, cutHeight= MEDissThres, verbose =3)
 
@@ -179,7 +183,9 @@ mergedMEs = merge$newMEs
 #plot dendrogram with module colors below it
 plotDendroAndColors(geneTree, dynamicColors, c("Modules"), dendroLabels= FALSE, hang=0.03, addGuide= TRUE, guideHang=0.05)
 
-plotDendroAndColors(geneTree, cbind(dynamicColors, mergedColors), c("Dynamic Tree Cut", "Merged dynamic\n(cutHeight=0.2)"), dendroLabels= FALSE, hang=0.03, addGuide= TRUE, guideHang=0.05)
+caption <- c("Dynamic Tree Cut", "Merged dynamic", "\n(cutHeight: ", cutHeight,")")
+
+plotDendroAndColors(geneTree, cbind(dynamicColors, mergedColors), caption, dendroLabels= FALSE, hang=0.03, addGuide= TRUE, guideHang=0.05)
 
 moduleColors <- mergedColors
 
@@ -319,4 +325,5 @@ psave <- p1 +  plot_spacer() + p2 + plot_layout(widths = c(7, -0.25, 1.5)) + lab
 
 psave
 
+save.image()
 
