@@ -1,10 +1,10 @@
-# Running data based on 375 libarries
+# Running data based on 388 libarries
 # Ricardo Gomez-Reyes
 # https://github.com/RJEGR/Small-RNASeq-data-analysis/blob/master/DOWNSTREAM_BKP/DIFFEXP/DADA2_iso_miRNA_LAB.R
 
 rm(list=ls())
 
-source('https://raw.githubusercontent.com/RJEGR/BM/7b306de3fedc539640e475dd157a67db9fdb8a47/filteringAndTriming_learnError_test.R')
+# source('https://raw.githubusercontent.com/RJEGR/BM/7b306de3fedc539640e475dd157a67db9fdb8a47/filteringAndTriming_learnError_test.R')
 
 args = commandArgs(trailingOnly=TRUE)
 
@@ -12,7 +12,7 @@ args = commandArgs(trailingOnly=TRUE)
 # ==============
 ## Checking and Load packages ----
 # ==============
-.cran_packages <- c("ggplot2", "GGally", "reshape2", "dplyr")
+.cran_packages <- c("ggplot2", "GGally", "reshape2", "dplyr","ggExtra")
 .bioc_packages <- c("dada2")
 
 .inst <- .cran_packages %in% installed.packages()
@@ -49,28 +49,34 @@ path <- "~/MEIOFAUNA/raw-seqs/"
 setwd(path)
 
 out_path <- file.path(path, run)
-system(command = paste0("mkdir -p ", out_path), intern = F)
+
+# create it manually if widows
+
+# system(command = paste0("mkdir -p ", out_path), intern = F)
 
 
 # outdir
 
 system(paste0('mkdir -p ', path, '/outputs'))
+
 outpath <- paste0(path, "/outputs")
 
 # Input dataset
 
-fastq.gz <- sort(list.files(path, pattern="fastq.gz"))
+str(fastq.gz <- sort(list.files(path, pattern=".gz$")))
 
-fqFs <- sort(fastq.gz[grep('R1', fastq.gz)])
-fqRs <- sort(fastq.gz[grep('R2', fastq.gz)])
+str(fqFs <- sort(fastq.gz[grep('R1', fastq.gz)]))
+str(fqRs <- sort(fastq.gz[grep('R2', fastq.gz)]))
 
-fqFs <- fqFs[1:7]
-fqRs <- fqRs[1:7]
+# sampleo <- c(1, 85, 100)
+# 
+# fqFs <- fqFs[sampleo]
+# fqRs <- fqRs[sampleo]
 
 
-source("https://raw.githubusercontent.com/RJEGR/metagenomics/master/plotQualityProfile.R")
+# source("https://raw.githubusercontent.com/RJEGR/metagenomics/master/plotQualityProfile.R")
 
-plotQP(fqFs[1:2])
+# plotQP(c(fqFs[1], fqRs[1]))
 
 if(length(fqFs) != length(fqRs)) stop("Forward and reverse files do not match.")
 
@@ -86,13 +92,13 @@ filt <- sort(list.files(path, pattern="gz"))
 filtFs <- sort(filt[grep('R1', filt)])
 filtRs <- sort(filt[grep('R2', filt)])
 
-filtFs <- filtFs[1:7]
-filtRs <- filtRs[1:7]
+# filtFs <- filtFs[sampleo]
+# filtRs <- filtRs[sampleo]
 
-snF <- sapply(strsplit(filtFs, "[_]"), `[`, 1)
-snR <- sapply(strsplit(filtRs, "[_]"), `[`, 1)
+str(snF <- sapply(strsplit(filtFs, "[_]"), `[`, 1))
+str(snR <- sapply(strsplit(filtRs, "[_]"), `[`, 1))
 
-# snF[!snF %in% snR]
+snF[!snF %in% snR]
 
 if(!identical(snF, snR)) stop("Forward and reverse files do not match.")
 
@@ -104,28 +110,30 @@ packageVersion("dada2")
 
 # Filtrar de manera homogenea todas las bibliotecas como estandar 
 
-truncLen <- c(150,145)
+truncLen <- c(150,140)
 
 filterAndTrim <- filterAndTrim(fwd=file.path(path, fqFs), filt=file.path(filtpathF, fqFs),
                                rev=file.path(path, fqRs), filt.rev=file.path(filtpathR, fqRs),
                                truncLen = truncLen, trimRigh = c(100,100),
                                maxEE=2, truncQ=10, maxN=0, rm.phix=TRUE,
                                compress=TRUE, verbose=TRUE, multithread = F)
-filtFs <- file.path(filtpathF, fqFs)[1]
-plotQP(file.path(filtpathF, fqFs)[1])
+
+filtFs <- c(file.path(filtpathF, fqFs)[1], file.path(filtpathR, fqRs)[1])
+
+# plotQP(filtFs)
 
 pct_trim <- 1 - filterAndTrim[,2]/filterAndTrim[,1]
 
 pct_trim
 
 # Learn Error ----
-MAX_CONSIST <- 20
-
-threads <- NULL
-
-errF <- learn_Err(filtFs)
-
-plotErrors(errF, nominalQ=TRUE)
+# MAX_CONSIST <- 40
+# 
+# threads <- NULL
+# 
+# errF <- learn_Err(filtFs)
+# 
+# plotErrors(errF, nominalQ=TRUE)
 
 write.table(filterAndTrim, 
             file = paste0(outpath, "/", out_prefix, "_filterAndTrim.tsv"), 
@@ -171,37 +179,47 @@ for(sam in sample.groups) {
   cat("Infering amplicon sequence variance using the error rate learned from run:", sam, "\n")
   
   ddR <- dada(derepR, err=errR, multithread = threads)
+  
   merger <- mergePairs(ddF, derepF, ddR, derepR)
+  
+  propagateCol <- names(ddR)
+  
+  # nrow(mergers <- mergePairs(dadaFs, derepFs, 
+  #                            minOverlap = 12, maxMismatch = 1,
+  #                            verbose=TRUE, returnRejects = TRUE, 
+  #                            propagateCol=propagateCol))
   
   mergers[[sam]] <- merger
 }
 
-saveRDS(mergers, paste0(outpath, "/mergers.rds"))
+library(tidyverse)
+
+write_rds(mergers, file = "mergers.rds")
 
 rm(derepF); rm(derepR)
-# path <- '/Users/cigom/metagenomics/Franccesco/callahan_multirun'
-# mergers <- readRDS(paste0(path, "/mergers.rds"))
 
-names(mergers) <- paste("G", names(mergers), sep="")
+# names(mergers) <- paste("G", names(mergers), sep="")
 
 # Construct sequence table  -----
 # Load first seqtab
-seqtab <- makeSequenceTable(mergers[[1]])
+# seqtab <- makeSequenceTable(mergers[[1]])
+# 
+# # Add other seqtabs
+# for(sam in 2:length(names(mergers))){
+#   add_seqtab <- makeSequenceTable(mergers[[sam]])
+#   seqtab <- mergeSequenceTables(seqtab, add_seqtab)
+# }
 
-# Add other seqtabs
-for(sam in 2:length(names(mergers))){
-  add_seqtab <- makeSequenceTable(mergers[[sam]])
-  seqtab <- mergeSequenceTables(seqtab, add_seqtab)
-}
+seqtab <- makeSequenceTable(mergers)
 
-saveRDS(seqtab, paste0(outpath, "/seqtab.rds"))
+saveRDS(seqtab, "seqtab.rds")
 
 # and remove chimeras ----
 
 # We filter high-quality reads by requiring an exact match to the proximal primer and the presence of the distal primer.
 
 
-minOverlap <- 20
+minOverlap <- 12
 
 seqtab <- collapseNoMismatch(seqtab, 
                              minOverlap = minOverlap, 
@@ -214,3 +232,55 @@ seqtab.nochim <- removeBimeraDenovo(seqtab,
 # insilico amplicon trimming of ASVs
 targetLength <- seq(100,180)
 seqtab.nochim.targetLength <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% targetLength]
+
+
+# save ----
+# revisar nombres y renombrar, despues procesar combine_features e incluir fasta para filtrar!
+
+save_seqtab <- function(seqtab) {
+  # ============
+  # Save Fasta
+  # ============ 
+  
+  asv_seqs <- colnames(seqtab)
+  n_asv <- dim(seqtab)[2]
+  asv_headers <- vector(n_asv, mode="character")
+  
+  for (i in 1:n_asv) {
+    asv_headers[i] <- paste(">ASV", i, sep="_")
+  }
+  
+  asv_fasta <- c(rbind(asv_headers, asv_seqs))
+  
+  write(asv_fasta,
+        file=paste0(outpath, "/",
+                    out_prefix, "_ASVs.fasta"))
+  
+  # ============
+  # Save count table: 
+  # ============
+  
+  
+  
+  
+  asv_tab <- t(seqtab)
+  
+  id_samples <- colnames(asv_tab)
+  camp <- sapply(strsplit(id_samples, "[-]"), `[`, 2)
+  ship <- sapply(strsplit(id_samples, "[-]"), `[`, 3)
+  
+  row.names(asv_tab) <- sub(">", "", asv_headers)
+  colnames(asv_tab) <- paste(ship, camp, sep = '.')
+  
+  write.table(asv_tab,
+              file= paste0(outpath, "/",
+                           out_prefix, "_ASVs_count.table"),
+              sep="\t",
+              row.names = TRUE,
+              col.names = TRUE,
+              quote=FALSE
+  )
+}
+
+save_seqtab(seqtab.nochim.targetLength)
+
