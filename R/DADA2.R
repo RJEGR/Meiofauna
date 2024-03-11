@@ -321,8 +321,9 @@ write_rds(seqtab.nochim, file = "seqtab.nochim.rds")
 
 
 # insilico amplicon trimming of ASVs
+seqtab.nochim <- read_rds("seqtab.nochim.rds")
 
-targetLength <- seq(100,200)
+targetLength <- seq(100,250)
 
 seqtab.nochim.targetLength <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% targetLength]
 
@@ -359,11 +360,13 @@ save_seqtab <- function(seqtab) {
   asv_tab <- t(seqtab)
   
   id_samples <- colnames(asv_tab)
-  camp <- sapply(strsplit(id_samples, "[-]"), `[`, 2)
-  ship <- sapply(strsplit(id_samples, "[-]"), `[`, 3)
+  camp <- sapply(strsplit(id_samples, "[-]"), `[`, 1)
+  ship <- sapply(strsplit(id_samples, "_"), `[`, 1)
   
   row.names(asv_tab) <- sub(">", "", asv_headers)
-  colnames(asv_tab) <- paste(ship, camp, sep = '.')
+  colnames(asv_tab) <- ship # paste(ship, camp, sep = '.')
+  
+  # write_tsv(data.frame(asv_tab), file= paste0(out_prefix, "_ASVs_count.table"))
   
   write.table(asv_tab,
               file= paste0(out_prefix, "_ASVs_count.table"),
@@ -374,5 +377,5 @@ save_seqtab <- function(seqtab) {
   )
 }
 
-save_seqtab(seqtab.nochim)
+save_seqtab(seqtab.nochim.targetLength)
 
