@@ -17,9 +17,6 @@ fqRs <- sort(fastq.gz[grep('R2', fastq.gz)])
 
 library(tidyverse)
 
-ddF <- read_rds("dadaError.rds")[[1]]
-ddR <- read_rds("dadaError.rds")[[2]]
-
 # Plot error ----
 # plotErrors()
 
