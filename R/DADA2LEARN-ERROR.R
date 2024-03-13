@@ -3,12 +3,13 @@
 
 # write_rds(list(ddF, ddR), file = "dadaError.rds")
 
+# source(')
 
-path <- "C:/Users/Israel V/Documents/MEIOFAUNA//raw-seqs/"
+path <- "D:/raw-seqs/filtered"
 
 setwd(path)
 
-fastq.gz <- sort(list.files(path, pattern="fq.gz"))
+str(fastq.gz <- sort(list.files(path, pattern="fq.gz")))
 
 
 fqFs <- sort(fastq.gz[grep('R1', fastq.gz)])
@@ -92,6 +93,52 @@ transdf_q <- function (dq,
   
   
   return(transdf)
+}
+
+
+# big-data error ----
+sample.groups <- unique(sapply(strsplit(fqFs, "[-]"), `[`, 1))
+
+errFs <- vector("list", length(sample.groups))
+errRs <- vector("list", length(sample.groups))
+
+names(errFs) <- sample.groups
+names(errRs) <- sample.groups
+
+# Learn error and , derep and run dada
+
+for(sam in sample.groups) {
+  
+  run <- sapply(strsplit(fqFs, "[-]"), `[`, 1)
+  
+  which_samples <- which(run %in% sam)
+  
+  cat("Processing Run:", sam, "\n")
+  
+  # sampleo
+  # if length(which_samples) > 3 
+  which_samples <- sample(which_samples, 3)
+  # else 
+  # which_samples <- sample(which_samples, length(which_samples)) 
+  
+  Fs <- file.path(path, fqFs)[which_samples]
+  Rs <- file.path(path, fqRs)[which_samples]
+  
+  if(length(Fs) != length(Rs)) stop("Forward and reverse files do not match.")
+  
+  samples <- sapply(strsplit(basename(Fs), "[_]"), `[`, 1)
+  cat("Processing Files:",  samples, "\n")
+  
+  cat("learn Errors in Run: ", sam, "\n")
+  
+  require(dada2)
+  
+  errF <- learnErrors(Fs, nbases=1e8, multithread = F)
+  # Learn reverse error rates
+  errR <- learnErrors(Rs, nbases=1e8, multithread = F)
+  
+  errFs[[sam]] <- errF
+  errRs[[sam]] <- errR
 }
 
 
