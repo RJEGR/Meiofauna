@@ -145,15 +145,39 @@ for(sam in sample.groups) {
 nti = c("A", "C", "G", "T")
 ntj = c("A", "C", "G", "T")
 
-merge_errFs <- lapply(errFs, transdf_q) %>% do.call(rbind, .)
+getwd()
+
+write_rds(errFs, "errFs.rds")
+write_rds(errRs, "errRs.rds")
+
+
+merge_errFs <- lapply(errFs, transdf_q) %>% do.call(rbind, .) 
 merge_errRs <- lapply(errRs, transdf_q) %>% do.call(rbind, .)
 
-sample.groups <- unique(sapply(strsplit(fqFs, "[-]"), `[`, 1))
-mergers <- vector("list", length(sample.groups))
-names(mergers) <- sample.groups
+merge_errFs <- merge_errFs %>% as_tibble(rownames = "Batch") %>% 
+  mutate(Batch = sapply(strsplit(Batch, "[.]"), `[`, 1)) %>%
+  mutate(PE = "errFs")
 
-for (i in 1:n_asv) {
-  asv_headers[i] <- paste(">ASV", i, sep="_")
-}
+merge_errRs <- merge_errRs %>% as_tibble(rownames = "Batch") %>% 
+  mutate(Batch = sapply(strsplit(Batch, "[.]"), `[`, 1)) %>%
+  mutate(PE = "errFs")
 
-transdf_q(ddF[[1]]$trans)
+merge_errRs %>%
+  rbind(., merge_errRs) %>%
+  # filter(batch == '04') %>%
+  filter(from %in% nti & to %in% ntj) %>%
+  ggplot(aes(x = Qual)) +
+  geom_point(aes(y = Observed), color = "gray40", 
+             na.rm = TRUE, alpha = 1/5) + 
+  geom_line(aes(y = Input, color = Batch), 
+            linetype = "solid", size = 1, alpha = 4/5) +
+  scale_y_log10() + 
+  facet_wrap(~Transition, nrow = length(nti)) +
+  labs(x = "Consensus quality score",
+       y = "Error frequency (log10)",
+       caption = 'Estimate (Lines) and Observed (Points) rates',
+       title = 'Transitions error rate') +
+  theme_bw() +
+  theme(legend.position = "top") -> p
+
+ggsave(p, filename = 'EEPlot.png', width = 11, height = 7)
