@@ -6,7 +6,7 @@ if(!is.null(dev.list())) dev.off()
 
 options(stringsAsFactors = FALSE, readr.show_col_types = FALSE)
 
-wd <- "~/MEIOFAUNA/INPUTS/"
+wd <- "~/Downloads/"
 
 library(phyloseq)
 library(microbiome)
