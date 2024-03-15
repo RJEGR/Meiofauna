@@ -64,7 +64,7 @@ run <- paste0("multirun_", date,"_18S")
 # Outputs in `pwd`:
 # ================
 
-path <- "C:/Users/Israel V/Documents/MEIOFAUNA//raw-seqs/"
+path <- "~/Documents/MEIOFAUNA_PAPER/MULTIRUN-ANALYSIS/LIBRARY/"
 
 # path <- "D:/raw-seqs/"
 
@@ -74,14 +74,13 @@ out_path <- file.path(path, run)
 
 # create it manually if widows
 
-# system(command = paste0("mkdir -p ", out_path), intern = F)
+system(command = paste0("mkdir -p ", out_path), intern = F)
 
 
 # outdir
 
-system(paste0('mkdir -p ','/outputs'))
+system(command = paste0("mkdir -p ", out_path, "/outputs"), intern = F)
 
-outpath <- paste0(path, "/outputs")
 
 # Input dataset
 
@@ -129,9 +128,7 @@ table(sapply(strsplit(filtFs, "-"), `[`, 1))
 
 # Filtrar de manera homogenea todas las bibliotecas como estandar 
 
-# truncLen <- c(150,140)
-
-truncLen <- c(0,0)
+truncLen <- c(150,150)
 
 filterAndTrim <- filterAndTrim(fwd=file.path(path, fqFs), filt=file.path(filtpathF, fqFs),
                                rev=file.path(path, fqRs), filt.rev=file.path(filtpathR, fqRs),
@@ -150,6 +147,11 @@ write.table(filterAndTrim,
             file = file_path_filt, 
             sep="\t", row.names = F, col.names = T)
 
+filterAndTrim %>% mutate(Sample = sapply(strsplit(Sample, "-"), `[`, 1)) %>% 
+  count(Sample)
+filterAndTrim %>% mutate(Sample = sapply(strsplit(Sample, "-"), `[`, 1)) %>% 
+  group_by(Sample) %>% tally(reads.out)
+
 # sample.groups <- sapply(strsplit(filtFs, "-"), `[`, 1)
 
 # filtFs <- c(file.path(filtpathF, fqFs)[1], file.path(filtpathR, fqRs)[1])
@@ -165,7 +167,7 @@ hist(pct_trim)
 # MAX_CONSIST <- 40
 # 
 
-threads <- F
+threads <- T
 
 # 
 # errF <- learn_Err(filtFs)
@@ -212,8 +214,8 @@ for(sam in sample.groups) {
   
   cat("learn Errors in Run: ", sam, "\n")
   
-  errF <- learnErrors(Fs, nbases=1e8, multithread = F, randomize = T)
-  errR <- learnErrors(Rs, nbases=1e8, multithread = F, randomize = T)
+  errF <- learnErrors(Fs, nbases=1e8, multithread = threads, randomize = T)
+  errR <- learnErrors(Rs, nbases=1e8, multithread = threads, randomize = T)
   
   cat("Dereplicate files: ", samples, "\n")
   
@@ -222,9 +224,9 @@ for(sam in sample.groups) {
   
   cat("Infering amplicon sequence variance using the error rate learned from run:", sam, "\n")
   
-  ddF <- dada(derepF, err=errF, multithread = F)
+  ddF <- dada(derepF, err=errF, multithread = threads)
   
-  ddR <- dada(derepR, err=errR, multithread = F)
+  ddR <- dada(derepR, err=errR, multithread = threads)
   
   # propagateCol <- names(ddR)
   
