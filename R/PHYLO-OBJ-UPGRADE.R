@@ -8,7 +8,9 @@ if(!is.null(dev.list())) dev.off()
 
 options(stringsAsFactors = FALSE, readr.show_col_types = FALSE)
 
-wd <- "C:/Users/Israel V/Documents/MEIOFAUNA/raw-seqs/CLASSIFIER-STEP/sklearn-classify_dir/"
+# wd <- "C:/Users/Israel V/Documents/MEIOFAUNA/raw-seqs/CLASSIFIER-STEP/sklearn-classify_dir/"
+
+wd <- "~/Downloads/RESULTS/classify-consensus-blast_dir/"
 
 # 1
 
