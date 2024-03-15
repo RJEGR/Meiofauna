@@ -104,6 +104,53 @@ ab_f <- ab_f %>% mutate(pct_ab = TotalAbundance/tReads)
 
 ab_f %>% 
   left_join(tax_f) %>%
-  ggplot(aes(x = log10(TotalAbundance), y = Prevalence)) + 
-  geom_point() + facet_wrap(~ k, scales = "free")
+  ggplot(aes(x = TotalAbundance, y = Prevalence)) + 
+  geom_point() +
+  scale_x_log10()
+  # facet_wrap(~ k, scales = "free")
   
+# Now lets investigate low prevelance/abundance phylum and subset them out.
+prevelancedf = apply(X = otu_table(phyloseq),
+  MARGIN = 1,
+  FUN = function(x){sum(x > 0)})
+
+# Add taxonomy and total read counts to this data.frame
+
+# # instead of top 10 of taxa, lets take the prevalence feature in account! ----
+
+prevelancedf = data.frame(Prevalence = prevelancedf,
+  TotalAbundance = taxa_sums(phyloseq),
+  tax_table(phyloseq))
+colnames(prevelancedf) <- c("Prevalence", "TotalAbundance", colnames(tax_table(phyloseq)))
+
+
+summary_prevalence <- plyr::ddply(prevelancedf, "p", function(df){
+  data.frame(mean_prevalence=mean(df$Prevalence),total_abundance=sum(df$TotalAbundance,na.rm = T),stringsAsFactors = F)
+})
+
+# summary_prevalence %>% arrange(desc(total_abundance)) %>% view()
+
+# Using the table above, determine the phyla to filter based on the 0.001 threshold
+
+sum(summary_prevalence$total_abundance)*0.001
+
+table(summary_prevalence$total_abundance/sum(summary_prevalence$total_abundance) >= 0.001)
+
+keepPhyla <- summary_prevalence$p[summary_prevalence$total_abundance/sum(summary_prevalence$total_abundance) >= 0.001]
+
+physeq = subset_taxa(phyloseq, p %in% keepPhyla)
+
+summary_prevalence <- summary_prevalence[summary_prevalence$p %in% keepPhyla,]
+
+summary_prevalence
+
+# Individual taxa filtering
+# Subset to the remaining phyla by prevelance.
+
+prevelancedf1 = subset(prevelancedf, p %in% get_taxa_unique(physeq, taxonomic.rank = "p"))
+
+ggplot(prevelancedf1, aes(TotalAbundance,Prevalence / nsamples(physeq),color=p)) +
+  # Include a guess for parameter
+  geom_hline(yintercept = 0.10, alpha = 0.5, linetype = 2) + geom_point(size = 2, alpha = 0.7) +
+  scale_x_log10() +  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  facet_wrap(~p) + theme(legend.position="none")
