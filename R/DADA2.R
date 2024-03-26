@@ -240,7 +240,7 @@ for(sam in sample.groups) {
 }
 
 
-write_rds(list(ddF, ddR), file = "dadaError.rds")
+# write_rds(list(ddF, ddR), file = "dadaError.rds")
 
 class(mergers)
 
@@ -249,7 +249,6 @@ write_rds(mergers, file = "mergers.rds")
 library(tidyverse)
 
 # mergers <- read_rds("mergers.rds")
-
 
 
 
@@ -303,7 +302,7 @@ write_rds(seqtab, file = "seqtab.rds")
 dim(seqtab)
 
 
-minOverlap <- 10
+minOverlap <- 20
 
 seqtab.collapsed <- collapseNoMismatch(seqtab, 
                              minOverlap = minOverlap, 
@@ -323,9 +322,14 @@ write_rds(seqtab.nochim, file = "seqtab.nochim.rds")
 
 
 # insilico amplicon trimming of ASVs
+
+hist(nchar(colnames(seqtab.nochim)))
+
 seqtab.nochim <- read_rds("seqtab.nochim.rds")
 
 targetLength <- seq(100,250)
+
+# targetLength <- seq(0,0)
 
 seqtab.nochim.targetLength <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% targetLength]
 
