@@ -1,9 +1,12 @@
 
-path <- "C:/Users/Israel V/Documents/MEIOFAUNA//raw-seqs/"
+# path <- "C:/Users/Israel V/Documents/MEIOFAUNA//raw-seqs/"
+path <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/MULTIRUN-ANALYSIS/LIBRARY/"
+
 
 setwd(path)
 
 library(tidyverse)
+library(dada2)
 
 mergers <- read_rds("mergers.rds")
 
