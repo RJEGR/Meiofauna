@@ -36,13 +36,13 @@ tax_f %>% select(all_of(into)) -> tax
 features <- colSums(!is.na(tax))
 
 
-pct <- c(features / nrow(tax))
+pct <- c(features / tax %>% drop_na(k) %>% nrow())
 
 caption <- "feaures-from-189-samples"
 
 df1 <- data.frame(into, features, pct, g = caption)
 
-tax %>% drop_na(k)
+
 
 df1 %>%
   mutate(into = factor(into, levels = into)) %>%
@@ -50,15 +50,16 @@ df1 %>%
   geom_path(size = 1.5, alpha=0.6, group = 1) +
   geom_point(size = 3, alpha=0.6) +
   geom_text(aes(label = paste0(round(pct*100, digits = 2), "%")), 
-    size = 4, vjust = -1, family = "GillSans") +
-  scale_y_continuous(labels = scales::comma) +
-  labs(y = "Number of sequence features", x = '', caption = caption) +
-  theme_bw(base_size = 14, base_family = "GillSans") -> ps 
+    size = 2.5, vjust = -1, family = "GillSans") +
+  scale_y_continuous(labels = scales::comma, limits = c(0,3500)) +
+  labs(y = "Number of ASVs features", x = '', caption = caption) +
+  theme_bw(base_size = 10, base_family = "GillSans") -> ps1
 
-ps + theme(panel.border = element_blank()) -> ps
-ps
+ps1 + theme(panel.border = element_blank()) -> ps1
 
-tax %>%  drop_na(g) %>% view()
+ps1
+
+# tax %>%  drop_na(g) %>% view()
 
 # 2)
 
@@ -74,15 +75,30 @@ ntax <- apply(tax, 2, nt)
 data.frame(x = names(ntax), ntax) %>%
   mutate(x = factor(x, levels = into)) %>%
   ggplot(aes(x = x, y = ntax)) +
-  geom_segment( aes(x=x, xend=x, y=0, yend=ntax), size = 3) +
-  geom_text(aes(label = ntax),vjust = -0.5, hjust = 0.5 ) +
-  theme_bw(base_size = 14, base_family = "GillSans") +
+  geom_segment( aes(x=x, xend=x, y=0, yend=ntax), size = 2) +
+  geom_text(aes(label = ntax),vjust = -0.5, hjust = 0.5, size = 2.5) +
+  theme_bw(base_size = 10, base_family = "GillSans") +
+  ylim(0, 70) +
   theme(panel.border = element_blank(),
-    panel.grid.minor = element_blank(),
+    # panel.grid.minor = element_blank(),
+    # panel.grid.major = element_blank(),
     axis.text.x = element_blank(),
-    axis.ticks.x = element_blank(),
-    panel.grid.major = element_blank()) +
-  labs(x = "", subtitle = 'Features with taxonomic assignation', y = "Number of taxons")
+    axis.ticks.x = element_blank()
+    ) +
+  labs(x = "", subtitle = 'Features with taxonomic assignation', y = "Number of taxons") -> ps 
+
+ps + theme(panel.border = element_blank()) -> ps
+
+library(patchwork)
+
+psave <- ps / plot_spacer() / ps1 + plot_layout(heights = c(1.5, -0.3 , 1))
+
+ggsave(psave,
+  filename = 'summary-tax.png',
+  # path = output_path,
+  width = 5, height = 5,
+  dpi =  300 , device = png)
+
 
 # # 3) Remove contaminants source: ----
 # as in script DB_EXPLORATORY COMPARISON
