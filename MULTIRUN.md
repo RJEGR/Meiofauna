@@ -41,12 +41,39 @@ qiime demux summarize \
 **2) Denoising sequence data with DADA2**
 ```bash
 time qiime dada2 denoise-paired \
-  --i-demultiplexed-seqs demuxsequences.qza \
+  --i-demultiplexed-seqs demultiplexed-sequences.qza \
   --p-trunc-len-f 150 \
   --p-trunc-len-r 150 \
-  --p-n-threads 2 \
-  --o-representative-sequences asv-sequences.qza \
+  --p-n-threads 4 \
+  --o-representative-sequences dna-sequences.qza \
   --o-table feature-table.qza \
   --o-denoising-stats dada2-stats.qza  
+
+```
+
+**Classify**
+```bash
+qiime tools import \
+  --type 'FeatureData[Sequence]' \
+  --input-path multirun_ASVs.fasta \
+  --output-path dna-sequences.qza
+  
+qiime feature-classifier classify-consensus-blast \
+	--p-query-cov 0.5 --p-perc-identity 0.5 \
+  --i-query dna-sequences.qza \
+  --i-reference-reads CURATED-1389f-1510r_worms_derep_sequences.qza \
+  --i-reference-taxonomy CURATED-1389f-1510r_worms_derep_taxonomy.qza \
+  --o-classification dna-sequences-classify-consensus-blast-tax.qza \
+  --o-search-results dna-sequences-classify-consensus-blast-results.qza
+  
+qiime tools export --input-path dna-sequences-classify-consensus-blast-tax.qza --output-path classify-consensus-blast_dir
+
+```
+
+Output
+```bash
+qiime metadata tabulate \
+  --m-input-file dada2-stats.qza \
+  --o-visualization dada2-stats-summ.qzv  
 
 ```
