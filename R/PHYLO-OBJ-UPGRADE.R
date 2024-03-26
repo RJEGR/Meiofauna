@@ -8,9 +8,12 @@ if(!is.null(dev.list())) dev.off()
 
 options(stringsAsFactors = FALSE, readr.show_col_types = FALSE)
 
+library(tidyverse)
+
 # wd <- "C:/Users/Israel V/Documents/MEIOFAUNA/raw-seqs/CLASSIFIER-STEP/sklearn-classify_dir/"
 
-wd <- "~/Downloads/RESULTS/classify-consensus-blast_dir/"
+# wd <- "~/Downloads/RESULTS/classify-consensus-blast_dir/"
+wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/MULTIRUN-ANALYSIS/LIBRARY/classify-consensus-blast_dir"
 
 # 1
 
@@ -18,7 +21,8 @@ tax <- list.files(path = wd, pattern = "taxonomy.tsv", full.names = T)
 
 tax <- read_tsv(tax)
 
-hist(tax$Confidence)
+# hist(tax$Confidence)
+hist(tax$Consensus)
 
 into <- c("k", "p", "c", "o","f", "g", "s")
 
@@ -36,15 +40,33 @@ tax <- tax %>%
 
 # 2) BIND W/ ABUNDANCE
 
-wd <- "C:/Users/Israel V/Documents/MEIOFAUNA/raw-seqs/"
+# wd <- "C:/Users/Israel V/Documents/MEIOFAUNA/raw-seqs/"
+
+wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/MULTIRUN-ANALYSIS/LIBRARY/"
+
 
 ab_f <- list.files(path = wd, pattern = 'multirun_ASVs_count.table', full.names = T)
 
 ab <- read.delim(ab_f, sep = "\t") # %>% as_tibble(rownames = "Feature ID")
 
+names(ab) %>% as_tibble()
+
+DB <- read_tsv(list.files(path = wd, pattern = "mapping-file-corregido.tsv", full.names = T)) %>%
+  dplyr::rename("LIBRARY_ID" = "#SampleID") %>% mutate(LIBRARY_ID = gsub("^XI", "X", LIBRARY_ID))
+
+all_sam <- gsub("[.]", "-", names(ab))
+
+
+
+all_sam[!all_sam %in% DB$LIBRARY_ID]
+
+data.frame("LIBRARY_ID" = all_sam  ) %>% as_tibble() %>%
+  anti_join(DB, by = "LIBRARY_ID") 
+
+
 
 MTD <-  read_tsv(list.files(path = wd, pattern = "mapping-file-corregido.tsv", full.names = T)) %>% 
-  select(`#SampleID`, Depth, Region) %>% vi
+  select(`#SampleID`, Depth, Region) %>% 
   mutate(Region = factor(Region, levels = c("Yucatan", "NW Shelf", "NW Slope", "Deep-sea"))) %>%
   dplyr::rename("LIBRARY_ID" = "#SampleID") %>%
   mutate(LIBRARY_ID = gsub("-", ".", LIBRARY_ID)) %>%
