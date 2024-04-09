@@ -6,8 +6,12 @@
 # Step 2 - Trimming (amplicon-) primers from both ends of paired-end reads
 
 
-# ./trim_galore -q 10 --paired X7-TS_TCTGTCGT-TAGTTGCG_L002_R1_001.fastq.gz X7-TS_TCTGTCGT-TAGTTGCG_L002_R2_001.fastq.gz./trim_galore -q 10 --paired X7-TS_TCTGTCGT-TAGTTGCG_L002_R1_001.fastq.gz X7-TS_TCTGTCGT-TAGTTGCG_L002_R2_001.fastq.gz
+# ./trim_galore -q 20 --paired X7-TS_TCTGTCGT-TAGTTGCG_L002_R1_001.fastq.gz X7-TS_TCTGTCGT-TAGTTGCG_L002_R2_001.fastq.gz
+
+# cutadapt -a CTGTCTCTTATA -A CTGTCTCTTATA -q 10 -Q 20 --discard-untrimmed -o X7-TS_R1_001.fq.gz -p X7-TS_R2_001.fq.gz X7-TS_TCTGTCGT-TAGTTGCG_L002_R1_001.fastq.gz X7-TS_TCTGTCGT-TAGTTGCG_L002_R2_001.fastq.gz
+
 # cutadapt -a TTGTACACACCGCCC...GTAGGTGAACCTGCRGAAGG -A CCTTCYGCAGGTTCACCTAC...GGGCGGTGTGTACAA --discard-untrimmed -o Nombre_archivo_F -p Nombre_archivo_R input_file_F input_file_R
+
 # for f in $(ls *R1* | grep fastq); do ./trim_galore -q 10 --paired ${f%_R*}_R1_001.fastq.gz ${f%_R*}_R2_001.fastq.gz; done
 
 rm(list=ls())
@@ -127,6 +131,7 @@ table(sapply(strsplit(filtFs, "-"), `[`, 1))
 
 
 # Filtrar de manera homogenea todas las bibliotecas como estandar 
+# esto permite hacer el merge de cada lote mas adelante.
 
 truncLen <- c(150,150)
 
@@ -325,20 +330,25 @@ write_rds(seqtab.nochim, file = "seqtab.nochim.rds")
 
 hist(nchar(colnames(seqtab.nochim)))
 
+setwd("/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/")
+
 seqtab.nochim <- read_rds("seqtab.nochim.rds")
 
 targetLength <- seq(100,250)
 
 # targetLength <- seq(0,0)
 
-seqtab.nochim.targetLength <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% targetLength]
+dim(seqtab.nochim.targetLength <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% targetLength])
 
-dim(seqtab.nochim.targetLength)
+dim(seqtab.nochim)
+
 
 # save ----
 # revisar nombres y renombrar, despues procesar combine_features e incluir fasta para filtrar!
 
 save_seqtab <- function(seqtab) {
+  
+  out_prefix <- 'multirun'
   # ============
   # Save Fasta
   # ============ 
