@@ -59,7 +59,7 @@ qiime tools import \
   --output-path dna-sequences.qza
   
 qiime feature-classifier classify-consensus-blast \
-	--p-query-cov 0.5 --p-perc-identity 0.5 \
+	--p-query-cov 0.8 --p-perc-identity 0.8 \
   --i-query dna-sequences.qza \
   --i-reference-reads CURATED-1389f-1510r_worms_derep_sequences.qza \
   --i-reference-taxonomy CURATED-1389f-1510r_worms_derep_taxonomy.qza \
