@@ -1,7 +1,6 @@
 
 # path <- "C:/Users/Israel V/Documents/MEIOFAUNA//raw-seqs/"
-path <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/MULTIRUN-ANALYSIS/LIBRARY/"
-
+path <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
 
 setwd(path)
 
@@ -16,7 +15,22 @@ nochim.seqs <- getSequences(seqtab.nochim)
 
 merger_to_df <- function(x){
   
+  test_if_emtpy_df <-  function(x){
+    
+    if(nrow(x)>0){
+      test <- TRUE
+    }
+    else{
+      test<- FALSE
+    }
+    
+    return(test)
+  }
+  
+  x <- x[unlist(lapply(x, test_if_emtpy_df))]
+  
   merge_df <- dplyr::bind_rows(x, .id = "Sample")
+  
   merge_df$seqlen <- nchar(merge_df$sequence)
   
   merge_df <- merge_df %>% as_tibble() 
@@ -24,12 +38,14 @@ merger_to_df <- function(x){
   return(merge_df)
 }
 
-
+# merger_to_df(mergers$PE1)
+  
 merge_df <- vector("list", length(mergers))
 
 names(merge_df) <- names(mergers)
 
 for (i in 1:length(mergers)) {
+  
   merge_df[[i]] <- merger_to_df(mergers[[i]])
 }
 
@@ -42,35 +58,39 @@ for (i in 1:length(mergers)) {
 do.call(bind_rows, merge_df) %>% as_tibble() -> merge_df 
 
 merge_df %>%
-  mutate(Sample = sapply(strsplit(Sample, "-"), `[`, 1)) %>%
-  count(Sample)
+  mutate(Cruise = sapply(strsplit(Sample, "-"), `[`, 1)) %>%
+  group_by(Cruise) %>%
+  summarise(n_asvs = n(), Tabundance = sum(abundance), n_sam = length(unique(Sample))) %>%
+  view()
+
 library("ggExtra")
 
 col1 = "#d8e1cf" 
 col2 = "#438484"
 
-targetLength <- seq(100,150)
+targetLength <- seq(0,0)
 
 merge_df %>% summarise(m = min(seqlen), M = max(seqlen))
 
 library(ggdensity)
 
 p1 <- merge_df %>%
-  mutate(Sample = sapply(strsplit(Sample, "-"), `[`, 1)) %>%
+  mutate(Sample = sapply(strsplit(Sample, "_"), `[`, 1)) %>%
   # mutate(trimmed = ifelse(seqlen %in% targetLength, 'Used', "Trimmed")) %>%
   mutate(trimmed = ifelse(sequence %in% nochim.seqs, 'nochim', "chim")) %>%
   group_by(Sample) %>% 
-  # mutate(abundance = abundance/sum(abundance)) %>%
+  mutate(abundance = abundance/sum(abundance)) %>%
   # summarise(min(abundance), max(abundance), mean(abundance))
-  ggplot(aes(x = nmatch, y = seqlen, fill = trimmed)) +
+  ggplot(aes(x = nmatch, y = seqlen)) +
   # geom_hdr() +
   geom_point(aes(size = abundance, color = trimmed), alpha = 3/5) +
   scale_color_manual(name = NULL, values = c("#de2d26", "black"))  +
   # xlim(0,150) +
-  scale_size(name = "Abundancia\nRelativa",
+  scale_size(name = "Relative\nAb.",
              # range = c(0, 5),
              # breaks = c(0.1, 0.5, 1),
-             labels = scales::label_comma()) +
+             labels = scales::label_percent()
+    ) +
   theme_bw(base_family='GillSans', base_size = 12) +
   theme(legend.position = "bottom") +
   xlab("Región del empalme (nt)") +
@@ -84,9 +104,10 @@ empalmePlot <- ggMarginal(p1, type = "density",
 # empalmePlot
 
 ggsave(empalmePlot,
-       filename = 'multi_run_empalme.png',
+       filename = 'multi_run_empalme_apr9.png',
        # path = output_path,
-       width = 10, height = 7,
+  device = png,
+       width = 5, height = 5,
        dpi =  300 )
 
 # TRACK PLOT -----
