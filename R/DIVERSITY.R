@@ -61,6 +61,39 @@ p <- R %>%
 
 ggsave(p, path = wd, filename = 'diversity-indexes.png', width = 12, height = 2.5, device = png, dpi = 300)
 
+# but also
+library(microbiome)
+tab <- alpha(phyloseq, index = "all")
+
+
+# rarefacion =====
+# TOMA MUCHO TIEMPO
+
+# iNEXT computes the following two types of rarefaction (interpolation) and extrapolation (prediction) and the associated 95% confidence intervals:
+  
+# 1. Sample-size-based rarefaction and extrapolation: diversity estimates for rarefied and extrapolated samples up to a maximum size (double reference sample size by default or a user-specified endpoint); see below.
+# 2. Coverage-based rarefaction and extrapolation: diversity estimates for rarefied and extrapolated samples for sample coverage up to a maximum coverage that is obtained from the double reference sample size by default or a user-specified endpoint; see below).
+
+library(iNEXT)
+
+# test <- t(ab)[1,]
+# i.zero <- which(test == 0)
+# test.no.zero <- test[-i.zero]
+
+ab <- as(otu_table(phyloseq), "matrix")
+
+x <- apply(ab, 2, function(x) x[-which(x == 0)])
+
+out <- iNEXT(x, q=c(0), datatype="abundance")
+
+
+# Sample-size-based R/E curves, separating by "site""
+ggiNEXT(out, type=1, facet.var="none", grey = T)
+ggiNEXT(out, type=2, facet.var="site", grey = T)
+ggiNEXT(out, type=2, facet.var="none", color.var="site")
+
+
+
 # test specpool
 # 
 
