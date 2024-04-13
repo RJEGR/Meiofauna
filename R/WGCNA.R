@@ -8,7 +8,8 @@ if(!is.null(dev.list())) dev.off()
 
 options(stringsAsFactors = FALSE, readr.show_col_types = FALSE)
 
-wd <- "~/MEIOFAUNA/INPUTS/"
+wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
+
 
 library(phyloseq)
 library(microbiome)
@@ -23,12 +24,25 @@ datExpr <- phyloseq %>%
   # subset_samples(Tissue=="Foregut") %>%
   prune_samples(sample_sums(.) > 0, .) %>%
   prune_taxa(taxa_sums(.) > 0, .) %>%
-  aggregate_taxa(., "p") %>%
+  aggregate_taxa(., "c") %>%
   # transform_sample_counts(., function(x) x / sum(x)) %>%
   otu_table() %>%
   as("matrix")
 
+
+
 datExpr <- t(datExpr) # log2(count+1) # 
+
+sampleTree = hclust(dist(datExpr), method = "average");
+
+sizeGrWindow(12,9)
+
+par(cex = 0.6);
+par(mar = c(0,4,2,0))
+
+plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5, cex.axis = 1.5, cex.main = 2)
+
+# The sample dendrogram does show X3-47 obvious outliers so I may remove or not this samples. If you need to remove some samples then you have to follow some code.
 
 str(datExpr)
 
@@ -47,7 +61,7 @@ if (!gsg$allOK) {
 }
 
 # When you have a lot of rows in the matrix (ex. genes or taxons) use the following code
-k=softConnectivity(datE=datExpr,power=3)
+k=softConnectivity(datE=datExpr,power=6)
 # Plot a histogram of k and a scale free topology plot
 sizeGrWindow(10,5)
 par(mfrow=c(1,2))
@@ -122,7 +136,7 @@ psave
 enableWGCNAThreads()
 
 # specify network type
-# softPower <- 2
+# softPower <- 5
 
 adjacency <- adjacency(datExpr, 
                        power = softPower, 
@@ -146,14 +160,14 @@ plot(geneTree, xlab="", sub="",
 
 # This sets the minimum number of genes to cluster into a module
 
-minClusterSize <- 2
+minClusterSize <- 10
 
-cutHeight <- 0.6
+cutHeight <- 0.99
 
 dynamicMods <- cutreeDynamic(dendro= geneTree, 
                              distM = dissTOM,
                              method = "hybrid",
-                             deepSplit = 2, 
+                             deepSplit = 1, 
                              cutHeight = cutHeight,
                              pamRespectsDendro = FALSE,
                              minClusterSize = minClusterSize)
@@ -172,7 +186,7 @@ METree = flashClust(as.dist(MEDiss), method= "average")
 
 # Set a threhold for merging modules. In this example we are not merging so MEDissThres=0.0
 
-MEDissThres = 0.8
+MEDissThres = 0.99
 
 merge = mergeCloseModules(datExpr, dynamicColors, cutHeight= MEDissThres, verbose =3)
 
@@ -218,6 +232,8 @@ TOMplot(plotTOM, dendro = geneTree, Colors = moduleColors)
 #
 
 datTraits <- phyloseq %>% sample_data() %>% with(., table(LIBRARY_ID, Region))
+
+# datTraits <- phyloseq %>% sample_data() %>% as(., "matrix")
 
 identical(rownames(datExpr), rownames(datTraits))
 
@@ -302,7 +318,7 @@ data.frame(reads, moduleColors) %>%
 p2 <- stats %>% 
   mutate(module = factor(module, levels = hclust$labels[hclust$order])) %>%
   ggplot(aes(y = module)) + #  fill = DE, color = DE
-  scale_x_continuous("Número de miRs") +
+  scale_x_continuous("Número de taxons") +
   geom_col(aes(x = n), width = 0.95, position = position_stack(reverse = TRUE)) +
   # geom_col(aes(x = reads_frac), width = 0.95, fill = "grey")
   # scale_fill_manual(name = '', values = c("#303960", "#647687", "#E7DFD5")) + # grey90
@@ -325,5 +341,4 @@ psave <- p1 +  plot_spacer() + p2 + plot_layout(widths = c(7, -0.25, 1.5)) + lab
 
 psave
 
-save.image()
 
