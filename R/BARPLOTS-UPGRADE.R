@@ -50,6 +50,15 @@ df <- phyloseq %>%
 
 # which_sam <- ab_f %>% select_if(is.double) %>% names()
 
+df %>%
+  filter(grepl("CHAPO",SampleID )) %>%
+  distinct(f)
+
+df <- df %>%
+  mutate(SampleID = KEYID.x) %>%
+  filter(!grepl("CHAPO",SampleID ))
+
+
 
 df %>% distinct(k)
 
@@ -81,9 +90,9 @@ barTax <- function(df, agglom_lev = "k", low_ab = 0.01) {
   
   if(colourCount > 7) {
     library(ggsci)
-    getPalette <- colorRampPalette(pal_uchicago()(7))(colourCount)
+    getPalette <- colorRampPalette(pal_igv(7))(colourCount)
   } else {
-    getPalette <- pal_uchicago("default")(colourCount)
+    getPalette <- pal_igv("default")(colourCount)
   }
   
   # pal_locuszoom
@@ -125,7 +134,7 @@ ps <- barTax(df, agglom_lev = "k", low_ab = 0.01) +
   theme(legend.position = "top") +
   guides(fill = guide_legend(title = "", nrow = 1 ))
 
-ggsave(ps, path = wd, filename = 'barplot_k_3.png', 
+ggsave(ps, path = wd, filename = 'barplot_k_1.png', 
   device = png, 
        width = 12, height = 6)
 
@@ -179,3 +188,31 @@ ps <- df %>%
 ggsave(ps, path = wd, filename = 'barplot_p.png', 
   device = png, 
   width = 6, height = 7.5)
+
+
+# NESTED BAR
+devtools::install_github("gmteunisse/ggnested")
+# EX. https://github.com/gmteunisse/fantaxtic?tab=readme-ov-file
+# PARA USARLO ES NECEARIO LIMPIAR LOS HUECOS EN LA TAXONOMIA PARA QUE SEA DESCENDENTE
+library(ggnested)
+
+data(diamonds)
+
+# df %>% mutate_all()
+
+ggnested(df, 
+  aes(SampleID, 
+    main_group = k, 
+    sub_group = p)) + 
+  geom_bar()
+
+devtools::install_github("gmteunisse/fantaxtic")
+require("fantaxtic")
+
+data(GlobalPatterns)
+
+top_asv <- top_taxa(GlobalPatterns, n_taxa = 10)
+plot_nested_bar(ps_obj = top_asv$ps_obj,
+  top_level = "k",
+  nested_level = "p")
+
