@@ -8,7 +8,7 @@ library(igraph)
 library(tidygraph)
 library(ggraph)
 
-path <- "~/MEIOFAUNA/INPUTS/"
+path <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
   
 exportNet <- function(TOMobj, moduleColors, threshold = 0.9) {
   
@@ -58,20 +58,38 @@ nodeFile <- paste0(path, "/",file_out, ".nodes.txt")
 
 g <- tidygraph::tbl_graph(nodes = read.delim(nodeFile), edges = read.delim(edgeFile), directed = FALSE)
 
+g %>% activate("edges")  %>% as_tibble() %>% ggplot(aes(weight)) + geom_histogram()
 
 g <- g %>% activate("edges") %>% mutate(weight = ifelse(weight < 0.3, NA, weight)) %>% filter(!is.na(weight))
 
-scale_col <- g %>% activate("nodes") %>% as_tibble() %>% distinct(`nodeAttr[nodesPresent, ]`) %>% pull()
+g %>% activate("edges")  %>% as_tibble() %>% ggplot(aes(weight)) + geom_histogram()
+
+scale_col <- g %>% activate("nodes") %>% as_tibble() %>% distinct(`nodeAttr.nodesPresent...`) %>% pull()
 
 g <- g %>% activate("nodes") %>%  
   mutate(betweenness = betweenness(.), degree = centrality_degree(),
          membership = igraph::cluster_louvain(., igraph::E(g)$weight)$membership,
          pageRank = page_rank(.)$vector)
 
-Levels <- c("green", "blue", "turquoise", "brown", "yellow", "grey")
+
+g %>% activate("nodes") %>% as_tibble() %>% 
+  # ggplot(aes(degree)) + geom_histogram()
+  group_by(`nodeAttr.nodesPresent...`) %>%
+  count(degree) %>%
+  ggplot(aes(y = n, x = degree, color = `nodeAttr.nodesPresent...`)) + 
+  geom_point() +
+  geom_line(orientation = "x") +
+  facet_wrap(~ `nodeAttr.nodesPresent...`) +
+  theme_bw(base_family = "GillSans", base_size = 14) +
+  scale_color_manual(values = scale_col) +
+  theme(legend.position = "none") +
+  labs(x = "Centrality Degree", y = "Number of ASVs")
+  
+
+Levels <- scale_col
 
 g <- g %>% activate("nodes") %>%
-  mutate(`nodeAttr[nodesPresent, ]` = factor(`nodeAttr[nodesPresent, ]`, levels = Levels))
+  mutate(`nodeAttr.nodesPresent...` = factor(`nodeAttr.nodesPresent...`, levels = Levels))
 
 layout = create_layout(g, layout = 'igraph', algorithm = 'kk')
 
@@ -79,8 +97,8 @@ layout = create_layout(g, layout = 'igraph', algorithm = 'kk')
 ggraph(layout) +
   scale_color_manual('', values = structure(scale_col, names = scale_col) ) +
   geom_edge_arc(aes(edge_alpha = weight), strength = 0.1) + # edge_width
-  geom_node_point(aes(color = `nodeAttr[nodesPresent, ]`, size = degree)) +
-  ggrepel::geom_text_repel(data = layout, aes(x, y, label = nodeName), max.overlaps = 50, family = "GillSans") +
+  geom_node_point(aes(color = `nodeAttr.nodesPresent...`, size = degree)) +
+  # ggrepel::geom_text_repel(data = layout, aes(x, y, label = nodeName), max.overlaps = 50, family = "GillSans") +
   scale_edge_width(range = c(0.3, 1)) +
   theme_graph(base_family = "GillSans") +
   guides(fill=guide_legend(nrow = 2)) +
@@ -97,11 +115,11 @@ names(node_labs) <- Levels
 
 
 ggraph(layout) +
-  facet_nodes(~ `nodeAttr[nodesPresent, ]`, labeller = labeller(`nodeAttr[nodesPresent, ]` = node_labs), 
+  facet_nodes(~ `nodeAttr.nodesPresent...`, labeller = labeller(`nodeAttr.nodesPresent...` = node_labs), 
               scales = "free") +
   scale_color_manual('', values = structure(scale_col, names = scale_col) ) +
   geom_edge_arc(aes(edge_alpha = weight), strength = 0.1) + # edge_width
-  geom_node_point(aes(color = `nodeAttr[nodesPresent, ]`, size = degree)) +
+  geom_node_point(aes(color = `nodeAttr.nodesPresent...`, size = degree)) +
   ggrepel::geom_text_repel(data = layout, aes(x, y, label = nodeName), max.overlaps = 50, family = "GillSans", size = 2) +
   scale_edge_width(range = c(0.3, 1)) +
   theme_graph(base_family = "GillSans") +
@@ -109,7 +127,7 @@ ggraph(layout) +
   # coord_fixed() +
   guides(color = "none") +
   ggforce::geom_mark_hull(
-    aes(x, y, group = as.factor(`nodeAttr[nodesPresent, ]`)),
+    aes(x, y, group = as.factor(`nodeAttr.nodesPresent...`)),
     color = NA, fill = "grey76",
     concavity = 4,
     con.size = 0.3,
