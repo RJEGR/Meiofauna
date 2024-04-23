@@ -139,3 +139,7 @@ phyloseq = phyloseq(otu_table(ab, taxa_are_rows = TRUE),
 
 saveRDS(phyloseq, paste0(wd, "phyloseq.rds"))
 
+
+
+
+
