@@ -24,7 +24,7 @@ datExpr <- phyloseq %>%
   # subset_samples(Tissue=="Foregut") %>%
   prune_samples(sample_sums(.) > 0, .) %>%
   prune_taxa(taxa_sums(.) > 0, .) %>%
-  aggregate_taxa(., "c") %>%
+  aggregate_taxa(., "p") %>% # p tax level perform good results
   # transform_sample_counts(., function(x) x / sum(x)) %>%
   otu_table() %>%
   as("matrix")
@@ -93,7 +93,7 @@ soft_values <- abs(sign(sft$fitIndices[,3])*sft$fitIndices[,2])
 
 soft_values <- round(soft_values, digits = 2)
 
-hist(soft_values)
+# hist(soft_values)
 
 power_pct <- quantile(soft_values, probs = 0.95)
 
@@ -101,7 +101,7 @@ softPower <- sft$fitIndices[,1][which(soft_values >= power_pct)]
 
 meanK <- sft$fitIndices[softPower,5]
 
-hist(sft$fitIndices[,5])
+# hist(sft$fitIndices[,5])
 
 softPower <- min(softPower)
 
@@ -136,14 +136,14 @@ psave
 enableWGCNAThreads()
 
 # specify network type
-# softPower <- 5
+# softPower <- 30 # if asvs level
 
 adjacency <- adjacency(datExpr, 
                        power = softPower, 
                        type = "unsigned")
 
 
-TOM <- TOMsimilarity(adjacency) # specify network type
+TOM <- TOMsimilarity(adjacency, TOMType = "unsigned") # specify network type
 
 
 dissTOM = 1 - TOM
@@ -155,12 +155,14 @@ dissTOM = 1 - TOM
 
 geneTree = flashClust(as.dist(dissTOM), method="average")
 
+dev.off()
+
 plot(geneTree, xlab="", sub="", 
      main= "Gene Clustering on TOM-based dissimilarity", labels= FALSE, hang=0.04)
 
 # This sets the minimum number of genes to cluster into a module
 
-minClusterSize <- 10
+minClusterSize <- 10 
 
 cutHeight <- 0.99
 
@@ -217,6 +219,7 @@ nm <- table(moduleColors)
 
 cat('Number of mudules obtained\n :', length(nm))
 
+# w/ p level result in 22 modules
 
 # write_rds(as_tibble(moduleColors, rownames = "Family") %>% 
 #             dplyr::rename("WGCNA" = "value"), 
@@ -227,7 +230,7 @@ plotTOM = dissTOM^7
 # Set diagonal to NA for a nicer plot
 diag(plotTOM) = NA
 # Call the plot function
-TOMplot(plotTOM, dendro = geneTree, Colors = moduleColors)
+# TOMplot(plotTOM, dendro = geneTree, Colors = moduleColors)
 
 #
 
