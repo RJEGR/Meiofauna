@@ -1,19 +1,45 @@
 # Generate a correlation sample-sample heatmap
 
-wd <- "~/MEIOFAUNA/INPUTS/"
 
-MTD <-  read_tsv(list.files(path = wd, pattern = "mapping-file-corregido.tsv", full.names = T)) %>% 
-  select(`#SampleID`, Depth, Region) %>%
-  dplyr::rename("LIBRARY_ID" = "#SampleID") %>%
-  mutate(Region = factor(Region, levels = c("Yucatan", "NW Shelf", "NW Slope", "Deep-sea")))
+library(tidyverse)
+library(phyloseq)
 
-ab_f <- list.files(path = wd, pattern = 'table_100_80', full.names = T)
+wd <- "~/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
 
-DATA <-  read_tsv(ab_f, skip = 1) 
+ps <- read_rds(paste0(wd, "phyloseq.rds"))
 
-DATA <- DATA %>% select_if(is.double) 
+# read_tsv(list.files(path = wd, pattern = "mapping-file-corregido.tsv", full.names = T)) 
 
-DATA <- as(DATA, "matrix")
+reg_levels <- c("Deep-sea", "NW Slope", "NW Shelf", "Yucatan")
+getPalette <- c("#000056", "#2E71A7","#60A4CF", "#9ECAE1")
+axis_col <- structure(getPalette, names = reg_levels)
+
+
+MTD <- as(sample_data(ps), 'data.frame') %>%
+  select(`KEYID.x`, Depth, Region) %>%
+  as_tibble(rownames = "LIBRARY_ID") %>%
+  dplyr::rename("KEYID" = "KEYID.x") %>%
+  mutate(Region = factor(Region, levels = reg_levels))
+
+# ab_f <- list.files(path = wd, pattern = 'table_100_80', full.names = T)
+# DATA <-  read_tsv(ab_f, skip = 1) 
+ 
+
+pss <- ps %>% transform_sample_counts(function(x) sqrt(x / sum(x)))
+
+DATA <- as(otu_table(pss), 'matrix') %>% as_tibble()
+
+identical(names(DATA), MTD$LIBRARY_ID)
+
+names(DATA) <- MTD$KEYID
+
+keep <- !grepl("CHAPO",names(DATA) )
+
+DATA <- DATA[,keep]
+
+# DATA <- DATA %>% select_if(is.integer) 
+
+# DATA <- as(DATA, "matrix")
 
 sample_cor = cor(DATA, method='pearson', use='pairwise.complete.obs')
 
@@ -26,20 +52,20 @@ hc_order <- hc_samples$labels[h$rowInd]
 #
 
 sample_cor %>% 
-  as_tibble(rownames = 'LIBRARY_ID') %>%
-  pivot_longer(cols = colnames(sample_cor), values_to = 'cor') %>%
-  left_join(MTD) %>% 
-  mutate(LIBRARY_ID = factor(LIBRARY_ID, levels = rev(hc_order))) -> sample_cor_long
+  as_tibble(rownames = 'KEYID') %>%
+  pivot_longer(cols = colnames(sample_cor), values_to = 'cor', names_to = "NAME") %>%
+  left_join(MTD, by = "KEYID") %>% 
+  mutate(KEYID = factor(KEYID, levels = rev(hc_order))) -> sample_cor_long
 
 library(ggh4x)
 
 P <- sample_cor_long %>%
-  ggplot(aes(x = LIBRARY_ID, y = name, fill = cor)) +  
+  ggplot(aes(x = KEYID, y = NAME, fill = cor)) +  
   geom_tile(linewidth = 0.2) +
-  ggsci::scale_fill_material(name = "", "indigo") +
+  ggsci::scale_fill_material(name = "", "grey") +
   scale_x_discrete(position = 'bottom') +
   ggh4x::scale_y_dendrogram(hclust = hc_samples, position = "left", labels = NULL) +
-  guides(y.sec = guide_axis_manual(labels = hc_order, label_size = 2.5, label_family = "GillSans")) +
+  guides(y.sec = guide_axis_manual(labels = hc_order, label_size = 1.5, label_family = "GillSans")) +
   # ggh4x::scale_x_dendrogram(hclust = hc_samples, position = "top", labels = NULL) +
   theme_bw(base_size = 7, base_family = "GillSans") +
   labs(x = '', y = '') +
@@ -47,7 +73,8 @@ P <- sample_cor_long %>%
     legend.position = "bottom",
     # axis.text.x = element_blank(),
     # axis.ticks.x = element_blank(),
-    axis.text.x = element_text(angle = 90, hjust = 1, size = 2.5),
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 1.5),
+    # axis.text.y = element_text(size = 1.5),
     strip.background = element_rect(fill = 'grey89', color = 'white'),
     panel.border = element_blank(),
     plot.title = element_text(hjust = 0),
@@ -58,33 +85,27 @@ P <- sample_cor_long %>%
     panel.grid.major.x = element_blank()) 
 
 P <- P + guides(
-  fill = guide_colorbar(barwidth = unit(1.5, "in"),
+  fill = guide_colorbar(barwidth = unit(2.5, "in"),
                         barheight = unit(0.05, "in"), label.position = "bottom",
                         alignd = 0.5,
-                        ticks.colour = "black", ticks.linewidth = 0.5,
-                        frame.colour = "black", frame.linewidth = 0.5,
+                        ticks.colour = "black", ticks.linewidth = 0.25,
+                        frame.colour = "black", frame.linewidth = 0.25,
                         label.theme = element_text(family = "GillSans", size = 7)))
 
 
 # TOP
 
 TOPDF <- sample_cor_long %>%
-  distinct(LIBRARY_ID, Region, Depth  ) %>%
+  distinct(KEYID, Region, Depth) %>%
   # dplyr::mutate(hpf = dplyr::recode_factor(hpf, !!!recode_to)) %>%
   # mutate(label = ifelse(pH %in% "Low", "*", "")) %>%
   mutate(y = 1)
 
 
-color_vector <- as.character(unique(MTD$Region))
-
-getPalette <- c("#4DAF4A", "#313695", "lightblue", "#E41A1C")
-
-axis_col <- structure(getPalette, names = color_vector)
-
 
 topplot <- TOPDF %>%
-  ggplot(aes(y = y, x = LIBRARY_ID, color = as.factor(Depth))) +
-  geom_point(shape = 15, size = 2) +
+  ggplot(aes(y = y, x = KEYID, color = as.factor(Region))) +
+  geom_point(shape = 15, size = 1.5) +
   #geom_text(aes(label = label),  vjust = -0.7, hjust = 0.5, size = 1.5, family =  "GillSans", color = "#d73027") +
   ggh4x::scale_x_dendrogram(hclust = hc_samples, position = 'top', labels = NULL) +
   # ggh4x::guide_dendro()
@@ -106,14 +127,14 @@ library(patchwork)
 
 psave <- topplot/ plot_spacer() /P + plot_layout(heights = c(0.6, -0.5, 5))
 
-ggsave(psave, filename = 'SAMPLE_HEATMAP.png', path = wd, width = 4, height = 4, device = png, dpi = 300)
+ggsave(psave, filename = 'samples-heatmap.png', path = wd, width = 4, height = 4.5, device = png, dpi = 500)
 
 
-color_vector <- as.character(unique(MTD$Region))
+# color_vector <- as.character(unique(MTD$Region))
+# 
+# getPalette <- c("#4DAF4A", "#313695", "lightblue", "#E41A1C")
 
-getPalette <- c("#4DAF4A", "#313695", "lightblue", "#E41A1C")
-
-axis_col <- structure(getPalette, names = color_vector)
+# axis_col <- structure(getPalette, names = color_vector)
 
 MTD %>% count(Depth) %>% pull(Depth)
 
