@@ -50,7 +50,7 @@ exportNet <- function(TOMobj, moduleColors, threshold = 0.9) {
 
 # g <- exportNet(TOM, moduleColors, threshold = 0)
 
-file_out <- "WGCNA.taxa"
+file_out <- "WGCNA.p.taxa"
 
 edgeFile <- paste0(path, "/",file_out, ".edges.txt")
 nodeFile <- paste0(path, "/",file_out, ".nodes.txt")
@@ -81,7 +81,7 @@ g %>% activate("nodes") %>% as_tibble() %>%
   geom_line(orientation = "x") +
   facet_wrap(~ `nodeAttr.nodesPresent...`) +
   theme_bw(base_family = "GillSans", base_size = 14) +
-  scale_color_manual(values = scale_col) +
+  scale_color_manual(values = structure(scale_col, names = scale_col)) +
   theme(legend.position = "none") +
   labs(x = "Centrality Degree", y = "Number of ASVs")
   
@@ -97,7 +97,7 @@ layout = create_layout(g, layout = 'igraph', algorithm = 'kk')
 ggraph(layout) +
   scale_color_manual('', values = structure(scale_col, names = scale_col) ) +
   geom_edge_arc(aes(edge_alpha = weight), strength = 0.1) + # edge_width
-  geom_node_point(aes(color = `nodeAttr.nodesPresent...`, size = degree)) +
+  geom_node_point(aes(color = `nodeAttr.nodesPresent...`, linewidth = degree)) +
   # ggrepel::geom_text_repel(data = layout, aes(x, y, label = nodeName), max.overlaps = 50, family = "GillSans") +
   scale_edge_width(range = c(0.3, 1)) +
   theme_graph(base_family = "GillSans") +
