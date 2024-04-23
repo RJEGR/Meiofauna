@@ -9,18 +9,63 @@ options(stringsAsFactors = FALSE, readr.show_col_types = FALSE)
 
 wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
 
+reg_levels <- c("Deep-sea", "NW Slope", "NW Shelf", "Yucatan")
+getPalette <- c("#000056", "#2E71A7","#60A4CF", "#9ECAE1")
+axis_col <- structure(getPalette, names = reg_levels)
 
 library(phyloseq)
 library(tidyverse)
 
 phyloseq <- read_rds(paste0(wd, '/phyloseq.rds'))
 
+# rarefy firts
+
+x<- as(otu_table(phyloseq), "matrix")
+
+rs <- rowSums(x)
+
+quantile(rs)
+
+library(vegan)
+S <- specnumber(x)
+Srar <- rarefy(x, min(rs))
+plot(S, Srar, xlab = "Observed No. of Species", ylab = "Rarefied No. of Species")
+
+r <- rarecurve(t(x), step=50, cex=0.5, tidy = T)
+
+ps <- r %>% 
+  full_join(sample_data(phyloseq), by = c("Site" = "LIBRARY_ID")) %>%
+  as_tibble() %>%
+  mutate(Region = factor(Region, levels = reg_levels)) %>%
+  ggplot(aes(x = Sample, y = Species, group = Site)) + 
+  geom_path(aes(color = Region)) + # 
+  labs(x = "Reads", y = "Number of ASVs") +
+  scale_x_continuous(labels = scales::comma) +
+  # geom_vline(xintercept =   median(sample_sums(phyloseq)), linetype = "dashed") +
+  theme_bw(base_family = "GillSans", base_size = 10) +
+  scale_color_manual(values = axis_col) +
+  facet_wrap(~ Region, nrow = 1, scales = "free") +
+  theme(legend.position='bottom', legend.justification = "right")
+
+ggsave(ps, path = wd, filename = 'rarefied-asvs.png', width = 10, height = 2.5, device = png, dpi = 300)
+
+# rarefy without replacement
+ps.rarefied = rarefy_even_depth(phyloseq, 
+  rngseed=1, sample.size=min(sample_sums(phyloseq)), replace=F, trimOTUs = F)
 
 # Alpha & Beta ----
 
 measures <- c("Observed", "Chao1", "Shannon", "InvSimpson")
 
-R <- estimate_richness(phyloseq, measures = measures)
+R <- estimate_richness(ps.rarefied, measures = measures)
+
+# calculate evenness index using vegan package
+
+Evenness <- R$Shannon / log(R$Observed)
+
+# Evenness <- diversity(x, index = "shannon") / log(specnumber(x)) 
+
+head(R <- cbind(R, Evenness))
 
 rownames(R) <- gsub("[.]", "-", rownames(R))
 
@@ -33,8 +78,17 @@ R <- data.frame(MTD,R)
 sample_data(phyloseq) <- R 
 
 
-saveRDS(phyloseq, paste0(wd, "/phyloseq.rds"))
+# saveRDS(phyloseq, paste0(wd, "/phyloseq.rds"))
 
+
+R %>% 
+  pivot_longer(cols = c(measures, "Evenness")) %>%
+  mutate(Region = factor(Region, levels = reg_levels)) %>%
+  mutate(name = factor(name, levels = c(measures, "Evenness")))%>% 
+  mutate(x = as.numeric(`X..TOC`)) %>%
+  ggplot(aes(x = x, y = value)) +
+  facet_wrap(~ name, scales = "free_y", nrow = 1) +
+  geom_point()
 
 # plots
 
@@ -42,8 +96,9 @@ reg_levels <- c("Deep-sea", "NW Slope", "NW Shelf", "Yucatan")
 
 
 p <- R %>% 
-  pivot_longer(cols = measures) %>%
+  pivot_longer(cols = c(measures, "Evenness")) %>%
   mutate(Region = factor(Region, levels = reg_levels)) %>%
+  mutate(name = factor(name, levels = c(measures, "Evenness"))) %>%
   ggplot(aes(x = Region, y = value)) +
   facet_wrap(~ name, scales = "free_y", nrow = 1) + 
   stat_boxplot(geom ='errorbar', width = 0.15,
@@ -58,6 +113,7 @@ p <- R %>%
     panel.grid = element_blank(), legend.text = element_text(size = 7),
     strip.background = element_rect(fill = 'grey88'))
 
+p
 
 ggsave(p, path = wd, filename = 'diversity-indexes.png', width = 12, height = 2.5, device = png, dpi = 300)
 
