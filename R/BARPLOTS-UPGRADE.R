@@ -63,13 +63,16 @@ df <- df %>%
 df %>% distinct(k)
 
 
+df <- filter_df(df)
+
 filter_df <- function(df, agglom_lev = "k", low_ab = 0.01) {
   df %>%
     dplyr::rename( "Level" = agglom_lev) %>%
-    drop_na(Level) %>%
+    # drop_na(Level) %>%
     group_by(SampleID) %>%
     mutate(RA = value/sum(value)) %>%
-    mutate(Level = ifelse(RA < low_ab, "ZLow", Level))
+    mutate(Level = ifelse(RA < low_ab, "ZLow", Level)) %>%
+    mutate(Level = ifelse(is.na(Level), "ZNo hit", Level))
 }
 
 barTax <- function(df, agglom_lev = "k", low_ab = 0.01) {
@@ -100,6 +103,9 @@ barTax <- function(df, agglom_lev = "k", low_ab = 0.01) {
   
   getPalette[length(getPalette)] <- "Black"
   labels[length(labels)] <- "Low abundance"
+  
+  getPalette[length(getPalette)-1] <- "grey90"
+  labels[length(labels)-1] <- "No hit"
   
   
   
