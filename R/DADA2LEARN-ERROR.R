@@ -5,11 +5,72 @@
 
 # source(')
 
-path <- "D:/raw-seqs/filtered"
+work_path <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/raw-seqs-bkp//filtN/cutadapt/Illumina/filterAndTrim/"
 
 setwd(path)
 
-str(fastq.gz <- sort(list.files(path, pattern="fq.gz")))
+str(rdata <- sort(list.files(work_path, pattern="RData", full.names = T)))
+
+basename(rdata[[6]])
+
+rds <- readr::read_rds(rdata[[6]])
+names(rds)
+
+errF <- transdf_q(rds$errF)
+errR <- transdf_q(rds$errR)
+
+
+errF  %>%
+  filter(from %in% nti & to %in% ntj) %>%
+  ggplot(aes(x = Qual)) +
+  geom_point(aes(y = Observed), color = "gray40", 
+    na.rm = TRUE, alpha = 1/5) + 
+  geom_line(aes(y = Estimated), 
+    linetype = "solid", size = 1, alpha = 4/5) +
+  geom_line(aes(y = Nominal), 
+    linetype = "dashed", size =0.5, alpha = 4/5, color = "red") +
+  scale_y_log10() + 
+  facet_wrap(~Transition, nrow = length(nti)) +
+  labs(x = "Consensus quality score",
+    y = "Error frequency (log10)",
+    caption = 'Estimate (Lines) and Observed (Points) rates',
+    title = 'Transitions error rate') +
+  theme_bw() +
+  theme(legend.position = "top")
+
+
+cat("Dereplicate files: \n")
+
+filtFs <- batch.f$X1
+filtRs <- batch.r$X1
+
+derepF <- derepFastq(filtFs, verbose = T)
+
+derepR <- derepFastq(filtRs, verbose = T)
+
+cat("Infering amplicon sequence variance using the error rate learned in this batch\n")
+
+# note, when  I do learnErrors there's no reason to do use selfConsist=TRUE
+dadaFs <- dada(derepF, err=rds$errF, multithread = TRUE)
+
+dadaRs <- dada(derepR, err=rds$errR, multithread = TRUE)
+
+
+for(i in 1:10) {
+  pr <- dim(makeSequenceTable(mergePairs(dadaFs, filtFs, dadaRs, filtRs,
+    minOverlap = 12,
+    maxMismatch = i,
+    verbose=F,
+  )))
+  cat(pr)
+}
+
+merger <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE, minOverlap = 12, maxMismatch = 1) 
+
+dim(merger)
+
+
+str(fastq.gz <- sort(list.files(work_path, pattern="fq.gz")))
 
 
 fqFs <- sort(fastq.gz[grep('R1', fastq.gz)])
@@ -20,6 +81,9 @@ library(tidyverse)
 
 # Plot error ----
 # plotErrors()
+
+nti = c("A", "C", "G", "T")
+ntj = c("A", "C", "G", "T")
 
 transdf_q <- function (dq, 
                        nti = c("A", "C", "G", "T"), 
@@ -142,8 +206,7 @@ for(sam in sample.groups) {
 }
 
 
-nti = c("A", "C", "G", "T")
-ntj = c("A", "C", "G", "T")
+
 
 getwd()
 
