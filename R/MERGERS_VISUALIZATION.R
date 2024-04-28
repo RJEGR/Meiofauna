@@ -60,8 +60,19 @@ do.call(bind_rows, merge_df) %>% as_tibble() -> merge_df
 merge_df %>%
   mutate(Cruise = sapply(strsplit(Sample, "-"), `[`, 1)) %>%
   group_by(Cruise) %>%
-  summarise(n_asvs = n(), Tabundance = sum(abundance), n_sam = length(unique(Sample))) %>%
-  view()
+  summarise(n_asvs = n(), Tabundance = sum(abundance), n_sam = length(unique(Sample))) 
+
+library(ggdensity)
+
+merge_df %>%
+  mutate(trimmed = ifelse(sequence %in% nochim.seqs, 'nochim', "chim")) %>%
+  ggplot(aes(y = nmatch, x = seqlen)) +
+  geom_hdr_lines() +
+  theme_bw(base_family='GillSans', base_size = 16) +
+  theme(legend.position = "bottom") +
+  ylab("Merged region (nt)") +
+  xlab("Amplicon Size (nt)") +
+  ylim(50, 160)
 
 library("ggExtra")
 
@@ -83,7 +94,9 @@ p1 <- merge_df %>%
   # summarise(min(abundance), max(abundance), mean(abundance))
   ggplot(aes(x = nmatch, y = seqlen)) +
   # geom_hdr() +
-  geom_point(aes(size = abundance, color = trimmed), alpha = 3/5) +
+  # geom_point(aes(size = abundance, color = trimmed), alpha = 3/5) +
+  geom_point(aes( color = trimmed), 
+    shape = 21, size = 1.5, stroke = 1.2, fill = "white") +
   scale_color_manual(name = NULL, values = c("#de2d26", "black"))  +
   # xlim(0,150) +
   scale_size(name = "Relative\nAb.",
@@ -93,15 +106,15 @@ p1 <- merge_df %>%
     ) +
   theme_bw(base_family='GillSans', base_size = 12) +
   theme(legend.position = "bottom") +
-  xlab("Región del empalme (nt)") +
-  ylab("Tamaño del amplicón (nt)")
+  xlab("Merged region (nt)") +
+  ylab("Amplicon Size (nt)")
 
 # Marginal histogram plot
 
 empalmePlot <- ggMarginal(p1, type = "density",
                           fill = col1, color = 'black')
 
-# empalmePlot
+empalmePlot
 
 ggsave(empalmePlot,
        filename = 'multi_run_empalme_apr9.png',
