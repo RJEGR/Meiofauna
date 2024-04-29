@@ -68,6 +68,17 @@ qiime feature-classifier classify-consensus-blast \
   
 qiime tools export --input-path dna-sequences-classify-consensus-blast-tax.qza --output-path classify-consensus-blast_dir
 
+# 2
+
+qiime feature-classifier classify-sklearn \
+  --i-classifier CLASSIFIER.qza \
+  --p-confidence 0 \
+  --i-reads dna-sequences.qza \
+  --o-classification dna-sequences-classify-sklearn.qza  
+  
+qiime tools export --input-path dna-sequences-classify-sklearn.qza  --output-path classify-sklearn_dir
+
+
 ```
 
 Output
