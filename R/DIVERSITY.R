@@ -7,7 +7,8 @@ if(!is.null(dev.list())) dev.off()
 
 options(stringsAsFactors = FALSE, readr.show_col_types = FALSE)
 
-wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
+wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/raw-seqs-bkp/filtN/cutadapt/Illumina/filterAndTrim/"
+
 
 reg_levels <- c("Deep-sea", "NW Slope", "NW Shelf", "Yucatan")
 getPalette <- c("#000056", "#2E71A7","#60A4CF", "#9ECAE1")

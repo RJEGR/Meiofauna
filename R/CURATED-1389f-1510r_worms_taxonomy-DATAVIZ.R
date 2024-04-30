@@ -5,7 +5,7 @@
 library(tidyverse)
 
 
-wd <- "~/MEIOFAUNA/TAX/"
+wd <- "~/Documents/MEIOFAUNA_PAPER/DB_COMPARISON/"
 
 
 tax_f <- read_tsv(list.files(path = wd, pattern = 'CURATED-1389f-1510r_worms_taxonomy.tsv$', full.names = T))
@@ -14,16 +14,35 @@ tax_f <- read_tsv(list.files(path = wd, pattern = 'CURATED-1389f-1510r_worms_tax
 into <- c("k", "p", "c", "f", "g", "s")
 
 # Res <- function(x) { rowSums(!is.na(x)) }
+# 
+# tax_f <- tax_f %>%
+#   separate(Taxon, sep = ";", into = into)
+# 
+# 
+# # RESOLUTION PER TAXON ----
+# # CUANTOS TAXONES DIFERENTES POR RANK
+# 
+# tax_f %>% select(all_of(into)) -> tax
+# 
 
-tax_f <- tax_f %>%
-  separate(Taxon, sep = ";", into = into)
+into <- c("k", "p", "c", "o","f", "g", "s")
+
+mutate_ranks <- c("none" = NA_character_, "os__" = "", "[a-z]__" = "", 
+  "Incertae_Sedis" = NA_character_, 
+  "uncultured" = NA_character_, 
+  "Unassigned"=NA_character_,
+  "Unknown" = NA_character_)
+
+taxdb <- tax_f %>% 
+  separate_wider_delim(cols = Taxon, delim = ";", names = into, too_few = "align_start") %>%
+  # separate(Taxon, sep = ";", into = into) %>%
+  select(all_of(into)) %>%
+  mutate_all(list(~ str_replace_all(., mutate_ranks))) %>%
+  mutate_all(function(x) {na_if(x,"")}) 
 
 
-# RESOLUTION PER TAXON ----
-# CUANTOS TAXONES DIFERENTES POR RANK
 
-tax_f %>% select(all_of(into)) -> tax
-tax <- tax %>% mutate_all(function(x) {na_if(x,"")})
+taxdb <- taxdb %>% mutate_all(function(x) {na_if(x,"")})
 
 # max.rank <-  ncol(tax) 
 
@@ -32,16 +51,16 @@ tax <- tax %>% mutate_all(function(x) {na_if(x,"")})
 # tail(res <- rowSums(!is.na(tax))) # max.rank - 
 # features <- nrow(tax) - colSums(!is.na(tax))
 
-features <- colSums(!is.na(tax))
+features <- colSums(!is.na(taxdb))
 
 
-pct <- c(features / nrow(tax))
+pct <- c(features / nrow(taxdb))
 
 caption <- "CURATED-1389f-1510r_worms_taxonomy"
 
 df1 <- data.frame(into, features, pct, g = caption)
 
-tax %>% drop_na(p)
+# tax %>% drop_na(p)
 
 df1 %>%
   mutate(into = factor(into, levels = into)) %>%
@@ -62,12 +81,12 @@ ps + theme(panel.border = element_blank()) -> ps
 
 nt <- function(x) {length(na.omit(unique(x)))}
 
-tax %>% distinct(c) %>% drop_na()
+taxdb %>% distinct(c) %>% drop_na()
 
 # k    p    c    f    g    s 
 # 5  110  431  782 1306 1751 
 
-ntax <- apply(tax, 2, nt)
+ntax <- apply(taxdb, 2, nt)
 
 data.frame(x = names(ntax), ntax) %>%
   mutate(x = factor(x, levels = into)) %>%

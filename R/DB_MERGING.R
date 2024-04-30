@@ -62,7 +62,11 @@ db2worms_f <- "SSURef_NR99-138.1-dna-seqs-derep-uniq-1389f-1510r-db_processed_to
 
 db2worms_f <- list.files(path = path, pattern = db2worms_f, full.names = T)
 
-db2worms <- read_rds(db2worms_f) %>% as_tibble()
+db2worms <- read_rds(db2worms_f) %>% as_tibble() 
+
+db2worms <- db2worms %>% filter(WormsRank != "not found")
+
+db2worms <- db2worms %>% filter(isMarine == 1)
 
 query_db_f <- "SSURef_NR99-138.1-query2wormsdb.rds"
 
@@ -70,16 +74,71 @@ query_db <- list.files(path = path, pattern = query_db_f, full.names = T)
 
 query_db <- read_rds(query_db)
 
-# query_db %>% left_join(db2worms) %>% view()
+query_db %>% left_join(db2worms) %>% view()
 
 
 # 1) FILTER WORMS   ====
 
 updated_query_db <- query_db %>% left_join(db2worms) %>% filter(status == "accepted")
 
+updated_query_db %>%
+  unnest(`Feature ID`) %>% view()
 # IS MARINE? 
 
 db2worms %>% filter(status == "accepted") %>% count(isMarine)
+
+# previous rank is == to wormsRank ?
+
+ranks <- c("kingdom","phylum","class","order","family","genus")
+
+# updated_query_db %>% 
+#   mutate(q = Rank == WormsRank) %>% 
+#   filter(q == 0) %>% # view()
+#   count(q)
+
+# updated_query_db %>%
+#   unnest(`Feature ID`)  %>%
+#   view()
+
+# deal w/ species resolution
+
+updated_query_db %>% filter(Rank == "species") %>% view()
+
+check_df <- updated_query_db %>%
+  unnest(`Feature ID`) %>%
+  select_at(c("Feature ID", ranks, "scientificname"))
+
+
+
+str(cc <- apply(check_df, 1, function(x) { sum(complete.cases(x)) }))
+
+# which(is.na(x))})
+
+check_df <- check_df  %>% mutate(cc = cc-2)
+
+view(check_df)
+
+check_df %>% group_by(`Feature ID`)  %>%
+  slice_max(cc) %>% 
+  arrange(`Feature ID`) %>% 
+  mutate(species = ifelse(cc == 6 & scientificname != genus, scientificname, NA))
+
+check_df <- check_df  %>% select_at(c("Feature ID", ranks, "species", "cc"))
+
+check_df <- check_df %>% ungroup() %>% distinct()
+
+check_df  %>% 
+  dplyr::group_by(`Feature ID`) %>%
+  dplyr::summarise(n = dplyr::n(), .groups = "drop") %>%
+  dplyr::filter(n > 1L) %>% left_join(check_df)  %>% view()
+
+updated_query_db %>%
+  unnest(`Feature ID`) %>%
+  select_at(c("Feature ID", ranks, "scientificname")) %>% 
+  arrange(`Feature ID`) %>%
+  group_by(`Feature ID`) %>%
+  distinct_at(ranks, .keep_all = F)
+
 
 # updated_query_db %>% view()
 
@@ -100,17 +159,34 @@ updated_query_db %>% filter(WormsRank != "not found") %>%  unnest(`Feature ID`) 
 
 # 2) CREATE TAX FORMAT =====
 
+updated_query_db %>% count(WormsRank)
+
+ordered_ranks <- c("p", "c", "o", "f", "g", "s") # substr(unique(updated_query_db$Rank),1,1) #
+
+c("kingdom" = "k",
+  "phylum" = "p",
+  "phylum (division)",
+  "subphylum" = "",
+  "infraphylum"= "",
+  "class" = "c",
+  "subclass" = "",
+  
+  
+  )
+
+structure(ordered_ranks, names = c("phylum", "class", "order", "family", "genus", "species"))
+  
 recode_ranks <- c("phylum (division)" = "phylum","subphylum"= "phylum","infraphylum"= "phylum",
   "subclass" = "class", "superorder"="order")
 
-ordered_ranks <- c("k","p", "c", "o", "f", "g", "s") # substr(unique(updated_query_db$Rank),1,1) #
 
-
+# 
+# Using WormsRank we duplicate records as recode_ranks dont known how to deal w/ sub,infra,super divisions
 updated_query_db %>%
-  mutate(WormsRank = recode_factor(WormsRank, !!!recode_ranks)) %>% 
+  mutate(WormsRank = recode_factor(WormsRank, !!!recode_ranks)) %>%
   unnest(`Feature ID`) %>%
   mutate_all(list(~ str_replace_all(., c("none" = NA_character_)))) %>%
-  drop_na(WormsRank) %>% 
+  drop_na(WormsRank) %>%
   group_by(`Feature ID`) %>%
   distinct(valid_name, WormsRank) %>%
   mutate(valid_name = str_replace_all(valid_name, c(" " = "_"))) %>%
@@ -119,8 +195,26 @@ updated_query_db %>%
   filter(WormsRank %in% ordered_ranks) %>%
   summarise(across(valid_name, .fns = fill_ranks)) %>%
   dplyr::rename("Taxon" = "valid_name") -> updated_query_db
+# 
+# updated_query_db <- updated_query_db %>%
+#   unnest(`Feature ID`) %>%
+#   mutate_all(list(~ str_replace_all(., c("none" = NA_character_)))) %>%
+#   drop_na(Rank) %>% 
+#   group_by(`Feature ID`) %>%
+#   distinct(valid_name, Rank) %>%
+#   mutate(valid_name = str_replace_all(valid_name, c(" " = "_"))) %>%
+#   mutate(Rank = substr(Rank, 1,1), valid_name = paste0(Rank, "__", valid_name)) %>%
+#   mutate(Rank = factor(Rank, levels = ordered_ranks)) %>%
+#   filter(Rank %in% ordered_ranks) %>%
+#   pivot_wider(names_from = Rank, values_from = valid_name) %>%
+#   mutate(p = ifelse(is.na(p), "p__", p)) %>%
+#   mutate(c = ifelse(is.na(c), "c__", c)) %>%
+#   mutate(o = ifelse(is.na(o), "o__", o)) %>%
+#   mutate(f = ifelse(is.na(f), "f__", f)) %>%
+#   mutate(g = ifelse(is.na(g), "g__", g)) %>%
+#   mutate(s = ifelse(is.na(s), "s__", s)) %>%
+#   unite("Taxon", p:s, sep = ";")
 
-updated_query_db %>% view()
 
 # SAVE FASTA AND TAX_FILE =====
 
@@ -178,20 +272,53 @@ f_ranks <- c("kingdom","phylum", "class", "order", "family", "genus", "species")
 
 ordered_ranks <- c("k","p", "c", "o", "f", "g", "s")
 
-updated_query_db %>%
+# updated_query_db %>%
+#   mutate(WormsRank = recode_factor(WormsRank, !!!recode_ranks)) %>%
+#   filter(WormsRank %in% f_ranks) %>%
+#   unnest(`Feature ID`) %>%
+#   mutate_all(list(~ str_replace_all(., c("none" = NA_character_)))) %>%
+#   drop_na(WormsRank) %>% 
+#   group_by(`Feature ID`) %>%
+#   distinct(WormsRank, valid_name) %>%
+#   mutate(valid_name = str_replace_all(valid_name, c(" " = "_"))) %>%
+#   mutate(WormsRank = substr(WormsRank, 1,1), valid_name = paste0(WormsRank, "__", valid_name)) %>%
+#   # filter(WormsRank %in% ordered_ranks) %>%
+#   mutate(WormsRank = factor(WormsRank, levels = ordered_ranks)) %>%
+#   summarise(across(valid_name, .fns = fill_ranks)) %>% 
+#   dplyr::rename("Taxon" = "valid_name") -> updated_query_db
+
+
+updated_query_db %>% count(Rank)
+
+.updated_query_db <- updated_query_db %>%
   mutate(WormsRank = recode_factor(WormsRank, !!!recode_ranks)) %>%
-  filter(WormsRank %in% f_ranks) %>%
   unnest(`Feature ID`) %>%
   mutate_all(list(~ str_replace_all(., c("none" = NA_character_)))) %>%
-  drop_na(WormsRank) %>% 
+  drop_na(Rank) %>% 
   group_by(`Feature ID`) %>%
-  distinct(WormsRank, valid_name) %>%
+  distinct(valid_name, Rank) %>%
   mutate(valid_name = str_replace_all(valid_name, c(" " = "_"))) %>%
-  mutate(WormsRank = substr(WormsRank, 1,1), valid_name = paste0(WormsRank, "__", valid_name)) %>%
-  # filter(WormsRank %in% ordered_ranks) %>%
-  mutate(WormsRank = factor(WormsRank, levels = ordered_ranks)) %>%
-  summarise(across(valid_name, .fns = fill_ranks)) %>% 
-  dplyr::rename("Taxon" = "valid_name") -> updated_query_db
+  mutate(Rank = substr(Rank, 1,1), valid_name = paste0(Rank, "__", valid_name)) %>%
+  mutate(Rank = factor(Rank, levels = ordered_ranks)) %>%
+  filter(Rank %in% ordered_ranks) 
+
+.updated_query_db %>%
+  dplyr::group_by(`Feature ID`, Rank) %>%
+  dplyr::summarise(n = dplyr::n(), .groups = "drop") %>%
+  dplyr::filter(n > 1L) %>% count(Rank)
+
+glue <- function(x) paste0(unique(x), collapse = "|")
+
+.updated_query_db %>%
+  pivot_wider(names_from = Rank, values_from = valid_name, values_fn = glue) %>%
+  filter()
+  mutate(p = ifelse(is.na(p), "p__", p)) %>%
+  mutate(c = ifelse(is.na(c), "c__", c)) %>%
+  mutate(o = ifelse(is.na(o), "o__", o)) %>%
+  mutate(f = ifelse(is.na(f), "f__", f)) %>%
+  mutate(g = ifelse(is.na(g), "g__", g)) %>%
+  mutate(s = ifelse(is.na(s), "s__", s)) %>%
+  unite("Taxon", p:s, sep = ";")
 
 # C) CONCAT FILES ====
 
