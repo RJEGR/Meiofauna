@@ -10,20 +10,22 @@ options(stringsAsFactors = FALSE, readr.show_col_types = FALSE)
 
 library(tidyverse)
 
-
-wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/classify-consensus-blast_dir"
+wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/raw-seqs-bkp/filtN/cutadapt/Illumina/filterAndTrim/CLASSIFICATION/classify-sklearn_dir/"
 
 # 1
 
 tax <- list.files(path = wd, pattern = "taxonomy.tsv", full.names = T)
 
-dim(tax <- read_tsv(tax)) # 9205
+dim(tax <- read_tsv(tax)) # 9205 (13226)
+
+hist(tax$Confidence)
 
 # hist(tax$Consensus)
 
-dim(tax <- filter(tax, Taxon != "Unassigned")) # 3979
+# (if using --p-confidence 0 all asvs will be assigned in classify-sklearn)
+# dim(tax <- filter(tax, Taxon != "Unassigned")) # 3979
 
-# hist(tax$Consensus)
+
 
 into <- c("k", "p", "c", "o","f", "g", "s")
 
@@ -33,12 +35,17 @@ mutate_ranks <- c("none" = NA_character_, "os__" = "", "[a-z]__" = "",
                                             "Unassigned"=NA_character_,
                                             "Unknown" = NA_character_)
 tax <- tax %>% 
-  separate(Taxon, sep = ";", into = into) %>%
+  # separate(Taxon, sep = ";", into = into) %>%
+  separate_wider_delim(cols = Taxon, delim = ";", names = into, too_few = "align_start") %>%
   mutate_all(list(~ str_replace_all(., mutate_ranks))) %>%
   mutate_all(function(x) {na_if(x,"")}) %>%
   data.frame(row.names = .$`Feature ID`)
   
-str(which_asvs_classified <- tax$Feature.ID) # length of 3979
+
+tax <- tax %>% mutate_all(function(x) {na_if(x,"")})
+  
+
+str(which_asvs_classified <- tax$Feature.ID) # length of 13226
 
 # 2) BIND W/ ABUNDANCE
 
@@ -48,18 +55,40 @@ str(which_asvs_classified <- tax$Feature.ID) # length of 3979
 
 wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
 
+wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/raw-seqs-bkp/filtN/cutadapt/Illumina/filterAndTrim/"
 
-ab_f <- list.files(path = wd, pattern = 'multirun_ASVs_count.table', full.names = T)
+
+ab_f <- list.files(path = wd, pattern = '*table', full.names = T)
 
 ab <- read.delim(ab_f, sep = "\t") # %>% as_tibble(rownames = "Feature ID")
 
-# rownames(ab)[ab[colnames(ab) %in% "PE1.F4"] > 0]
+dim(ab)
 
-sum(keep <- rownames(ab) %in% which_asvs_classified) # must match 3979
+sum(keep <- rownames(ab) %in% which_asvs_classified) # must match X
 
-dim(ab <- ab[keep,]) # and 163 samples
+dim(ab <- ab[keep,]) # and X samples
 
-.all_sam <- names(ab)
+# .all_sam <- names(ab)
+
+
+# assigned (confidence > 80)
+# count by accurassigned
+
+conf_val <- quantile(as.numeric(tax$Confidence), probs = 0.8)
+
+.tax <- tax[which(tax$Confidence >= conf_val),]
+
+hist(as.numeric(.tax$Confidence))
+
+ab %>%
+  as_tibble(rownames = "Feature.ID") %>%
+  # filter(`Feature ID` %in% which_asvs_classified) %>%
+  pivot_longer(-`Feature.ID`, names_to = "KEYID", values_to = "abundance") %>%
+  filter(abundance > 0) %>%
+  right_join(.tax, by = "Feature.ID") %>%
+  mutate(Cruise = sapply(strsplit(KEYID, "[.]"), `[`, 1)) %>%
+  group_by(Cruise) %>%
+  summarise(n_asvs = n(), TotalAbundance = sum(abundance)) %>% view()
 
 
 # KEEP PIVOTAL DATA
@@ -79,12 +108,12 @@ ab %>%
   as_tibble(rownames = "Feature ID") %>%
   # filter(`Feature ID` %in% which_asvs_classified) %>%
   pivot_longer(-`Feature ID`, names_to = "KEYID", values_to = "abundance") %>%
-  filter(abundance > 1) %>%
+  filter(abundance > 0) %>%
   mutate(Cruise = sapply(strsplit(KEYID, "[.]"), `[`, 1)) %>%
   group_by(Cruise) %>%
   summarise(n_asvs = length(unique(`Feature ID`)),
     n_sam = length(unique(KEYID)),
-    TotalAbundance = sum(abundance))
+    TotalAbundance = sum(abundance)) %>% view()
 
 # # BY ASV
 # Freq <- function(x){rowSums(x > 1)}
@@ -103,12 +132,34 @@ ab %>%
 
 DB <- read_tsv(list.files(path = wd, pattern = "MANIFEST.tsv", full.names = T))  
 
-MTD <- DB %>% right_join(diversity_db, by = "LIBRARY_ID") %>% 
+
+nrow(DB)
+
+MTD <- DB %>%
+  right_join(diversity_db, by = "LIBRARY_ID") %>%
   data.frame(row.names = .$LIBRARY_ID)
 
-sum(keep <- gsub("[.]", "-", colnames(ab)) %in% MTD$LIBRARY_ID) # match 160 cols
+dim(MTD)
 
-dim(ab <- ab[,keep])
+ncol(ab)
+
+which_sam <- colnames(ab)[!gsub("[.]", "-", colnames(ab)) %in% MTD$LIBRARY_ID]
+
+
+ab %>%
+  as_tibble(rownames = "Feature ID") %>%
+  # filter(`Feature ID` %in% which_asvs_classified) %>%
+  pivot_longer(-`Feature ID`, names_to = "KEYID", values_to = "abundance") %>%
+  group_by(KEYID) %>%
+  summarise(
+    n_asvs = n(),
+    n_sam = length(unique(KEYID)),
+    TotalAbundance = sum(abundance)) %>% 
+  filter(KEYID %in% which_sam)
+
+sum(keep <- gsub("[.]", "-", colnames(ab)) %in% MTD$LIBRARY_ID) # match 187 cols
+
+dim(ab <- ab[keep])
 
 # match sort
 sorted_sam <- sort(gsub("[.]", "-", colnames(ab)))
@@ -137,7 +188,7 @@ phyloseq = phyloseq(otu_table(ab, taxa_are_rows = TRUE),
                     tax_table(as(tax, 'matrix')),
                     sample_data(MTD))
 
-saveRDS(phyloseq, paste0(wd, "phyloseq.rds"))
+saveRDS(phyloseq, paste0(wd, "/phyloseq.rds"))
 
 
 
