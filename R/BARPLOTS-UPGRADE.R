@@ -6,15 +6,17 @@ if(!is.null(dev.list())) dev.off()
 
 options(stringsAsFactors = FALSE, readr.show_col_types = FALSE)
 
-wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
+# wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
+
+wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/raw-seqs-bkp/filtN/cutadapt/Illumina/filterAndTrim/"
 
 
 library(phyloseq)
 library(microbiome)
 library(tidyverse)
 
-phyloseq <- read_rds(paste0(wd, '/phyloseq.rds'))
-
+# phyloseq <- read_rds(paste0(wd, '/phyloseq.rds'))
+phyloseq <- read_rds(paste0(wd, '/ps.rds'))
 
 
 # BARPLOT =======
@@ -50,9 +52,9 @@ df <- phyloseq %>%
 
 # which_sam <- ab_f %>% select_if(is.double) %>% names()
 
-df %>%
-  filter(grepl("CHAPO",SampleID )) %>%
-  distinct(f)
+# df %>%
+#   filter(grepl("CHAPO",SampleID )) %>%
+#   distinct(p)
 
 df <- df %>%
   mutate(SampleID = KEYID.x) %>%
@@ -63,7 +65,7 @@ df <- df %>%
 df %>% distinct(k)
 
 
-df <- filter_df(df)
+
 
 filter_df <- function(df, agglom_lev = "k", low_ab = 0.01) {
   df %>%
@@ -71,9 +73,11 @@ filter_df <- function(df, agglom_lev = "k", low_ab = 0.01) {
     # drop_na(Level) %>%
     group_by(SampleID) %>%
     mutate(RA = value/sum(value)) %>%
-    mutate(Level = ifelse(RA < low_ab, "ZLow", Level)) %>%
-    mutate(Level = ifelse(is.na(Level), "ZNo hit", Level))
+    mutate(Level = ifelse(is.na(Level), "ZNo hit", Level)) %>%
+    mutate(Level = ifelse(RA < low_ab, "ZLow", Level))
 }
+
+# df <- filter_df(df)
 
 barTax <- function(df, agglom_lev = "k", low_ab = 0.01) {
   
@@ -140,7 +144,7 @@ ps <- barTax(df, agglom_lev = "k", low_ab = 0.01) +
   theme(legend.position = "top") +
   guides(fill = guide_legend(title = "", nrow = 1 ))
 
-ggsave(ps, path = wd, filename = 'barplot_k_1.png', 
+ggsave(ps, path = wd, filename = 'barplot_k_2.png', 
   device = png, 
        width = 12, height = 6)
 
