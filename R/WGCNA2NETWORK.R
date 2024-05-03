@@ -8,8 +8,12 @@ library(igraph)
 library(tidygraph)
 library(ggraph)
 
-path <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
+# path <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
   
+path <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/raw-seqs-bkp/filtN/cutadapt/Illumina/filterAndTrim/"
+
+x <- readr::read_rds(file.path(path, "WGCNA.rds"))
+
 exportNet <- function(TOMobj, moduleColors, threshold = 0.9) {
   
   nodeNames <- names(moduleColors)
@@ -24,7 +28,7 @@ exportNet <- function(TOMobj, moduleColors, threshold = 0.9) {
   nodeFile <- paste0(path, "/",file_out, ".nodes.txt")
   
   
-  Net = exportNetworkToCytoscape(TOMobj,
+  Net = WGCNA::exportNetworkToCytoscape(TOMobj,
                                  edgeFile = edgeFile,
                                  nodeFile = nodeFile,
                                  weighted = TRUE,
@@ -48,12 +52,17 @@ exportNet <- function(TOMobj, moduleColors, threshold = 0.9) {
   
 }
 
+# run once 
+
+TOM <- x$TOM
+moduleColors <- x$moduleColors
+
 # g <- exportNet(TOM, moduleColors, threshold = 0)
 
 file_out <- "WGCNA.p.taxa"
 
-edgeFile <- paste0(path, "/",file_out, ".edges.txt")
-nodeFile <- paste0(path, "/",file_out, ".nodes.txt")
+edgeFile <- paste0(wd, "/",file_out, ".edges.txt")
+nodeFile <- paste0(wd, "/",file_out, ".nodes.txt")
 
 
 g <- tidygraph::tbl_graph(nodes = read.delim(nodeFile), edges = read.delim(edgeFile), directed = FALSE)

@@ -1,5 +1,7 @@
 # Meiofauna
-Database curation and data visualization support for Meiofauna metabarcoding data. 
+Database curation and data visualization support for eDNA data. 
+
+![Figure 3](https://github.com/RJEGR/Meiofauna/blob/main/Figures/Fig3.png)
 
 # Author
 Ricardo Gomez-Reyes; 2023

@@ -42,7 +42,7 @@ colnames(sample_data(phyloseq))
 
 reg_levels <- c("Deep-sea", "NW Slope", "NW Shelf", "Yucatan")
 
-df <- phyloseq %>%
+.df <- phyloseq %>%
   # aggregate_taxa(., "k") %>%
   prune_samples(sample_sums(.) > 0, .) %>%
   prune_taxa(taxa_sums(.) > 0, .) %>%
@@ -50,34 +50,26 @@ df <- phyloseq %>%
   filter(value > 0) %>%
   mutate(Region = factor(Region, levels = reg_levels))
 
-# which_sam <- ab_f %>% select_if(is.double) %>% names()
-
-# df %>%
-#   filter(grepl("CHAPO",SampleID )) %>%
-#   distinct(p)
-
-df <- df %>%
+.df <- .df %>%
   mutate(SampleID = KEYID.x) %>%
   filter(!grepl("CHAPO",SampleID ))
 
-
-
-df %>% distinct(k)
-
-
-
-
 filter_df <- function(df, agglom_lev = "k", low_ab = 0.01) {
+  
+  recode_to <- c(`ZZLow` = "Low abundance", `ZZNo hit` = "No hit")
+    
   df %>%
-    dplyr::rename( "Level" = agglom_lev) %>%
+    dplyr::rename( "Level" = all_of(agglom_lev)) %>%
     # drop_na(Level) %>%
     group_by(SampleID) %>%
     mutate(RA = value/sum(value)) %>%
-    mutate(Level = ifelse(is.na(Level), "ZNo hit", Level)) %>%
-    mutate(Level = ifelse(RA < low_ab, "ZLow", Level))
+    ungroup() %>%
+    mutate(Level = ifelse(RA < low_ab, "ZZLow", Level)) %>%
+    mutate(Level = ifelse(is.na(Level), "ZZNo hit", Level)) %>%
+    mutate(Level = dplyr::recode(Level, !!!recode_to))
 }
 
-# df <- filter_df(df)
+filter_df(.df, agglom_lev = "p") %>% group_by(SampleID) %>% summarise(sum(RA))
 
 barTax <- function(df, agglom_lev = "k", low_ab = 0.01) {
   
@@ -89,36 +81,46 @@ barTax <- function(df, agglom_lev = "k", low_ab = 0.01) {
   
   library(ggsci)
   
-  df <- df %>% filter_df(., agglom_lev, low_ab)
+  df <- df %>% filter_df(agglom_lev, low_ab)
   
   
-  labels <- df %>% pull(Level) %>% unique() %>% sort()
-  colourCount = length(labels)
+  labels <- df %>% filter(!Level %in% c("No hit", "Low abundance")) %>% pull(Level) %>% unique() %>% sort()
+  
+  # labels[which(labels %in% "Low abundance")] <- NA
+  # labels[which(labels %in% "No hit")] <- NA
+  # labels <- labels[!is.na(labels)]
+  
+  colourCount <- length(labels)
   
   if(colourCount > 7) {
     library(ggsci)
-    getPalette <- colorRampPalette(pal_igv(7))(colourCount)
+    getPalette <- colorRampPalette(pal_igv()(7))(colourCount)
   } else {
     getPalette <- pal_igv("default")(colourCount)
   }
   
   # pal_locuszoom
+  # pal_ucscgb
+  
+  getPalette <- c(getPalette, "gray90", "black")
+  
+  labels <- c(labels, c("No hit", "Low abundance"))
+  
+  scale_fill_val <- structure(getPalette, names = labels)
   # 
-  
-  getPalette[length(getPalette)] <- "Black"
-  labels[length(labels)] <- "Low abundance"
-  
-  getPalette[length(getPalette)-1] <- "grey90"
-  labels[length(labels)-1] <- "No hit"
-  
-  
+  # getPalette[length(getPalette)] <- "Black"
+  # labels[length(labels)] <- "Low abundance"
+  # 
+  # getPalette[length(getPalette)-1] <- "grey90"
+  # labels[length(labels)-1] <- "No hit"
   
   df %>%
+    mutate(Level = factor(Level, levels = labels)) %>%
     ggplot(aes(y = RA, x = SampleID, fill = Level)) +
-    facet_grid( ~Region, scales = "free", space = "free") +
+    facet_grid( ~ Region, scales = "free", space = "free") +
     geom_col() +
     scale_y_continuous(labels = scales::percent, limits = c(0,1)) +
-    scale_fill_manual(agglom_lev, labels = labels, values = getPalette) +
+    scale_fill_manual(agglom_lev, values = scale_fill_val) +
     labs(y = "Relative abundance (%)", x = "Samples") +
     theme_classic(base_size = 16, base_family = "GillSans") +
     theme(
@@ -139,8 +141,18 @@ barTax <- function(df, agglom_lev = "k", low_ab = 0.01) {
 
 # ggsavepath <- paste0(wd, '/Figures/')
 
+# filtering low confidence assignments
 
-ps <- barTax(df, agglom_lev = "k", low_ab = 0.01) + 
+# conf_val <- quantile(as.numeric(unique(.df$Confidence)), probs = seq(0, 1, 0.05))
+#   
+# conf_val <- conf_val[names(conf_val) %in% "75%"]
+# 
+# .df %>% mutate(Confidence = as.numeric(Confidence)) %>%
+#   dplyr::rename( "Level" = all_of("k"))
+#   mutate(Level = ifelse(Confidence >= conf_val, Level, "No hit"))
+# 
+  
+ps <- barTax(.df, agglom_lev = "k", low_ab = 0) + 
   theme(legend.position = "top") +
   guides(fill = guide_legend(title = "", nrow = 1 ))
 
@@ -148,19 +160,21 @@ ggsave(ps, path = wd, filename = 'barplot_k_2.png',
   device = png, 
        width = 12, height = 6)
 
-barTax(df, agglom_lev = "p", low_ab = 0.1)
+barTax(dvz, agglom_lev = "p", low_ab = 0.01)
 
+# dvz <- .df %>% mutate(p = ifelse(as.numeric(Confidence) >= 0.5, p, "No hit"))
 
 
 # TOP PHYLA 
 
-out <-filter_df(df) %>% filter(Level != "ZLow")
+out <- filter_df(.df) %>% filter(Level != "Low abundance")
 
 MTD <- sample_data(phyloseq)
 
 # color_vector <- as.character(unique(MTD$Region))
 
 "#082F6B"
+
 getPalette <- c("#000056", "#2E71A7","#60A4CF", "#9ECAE1", "#C8E0EF", "#E6F0F9")
 
 axis_col <- structure(getPalette, names = reg_levels)
@@ -170,15 +184,17 @@ agglom_lev <- "p"
 out <- out %>%
   dplyr::rename( ".Level" = "Level") %>%
   dplyr::rename( "Level" = agglom_lev) %>%
+  mutate(Level = ifelse(as.numeric(Confidence) >= 0.5, Level, "No hit")) %>%
   drop_na(Level) %>%
-  mutate(Level = ifelse(.Level == "ZLow","ZLow", Level))
+  mutate(Level = ifelse(.Level == "Low abundance","Low abundance", Level))
   # mutate(Level = ifelse(RA < low_ab, "ZLow", Level))
 
 
-ps <- df %>%
+ps <- .df %>%
   dplyr::rename( "Level" = agglom_lev) %>%
+  # mutate(Level = ifelse(as.numeric(Confidence) >= 0.5, Level, NA)) %>%
   drop_na(Level) %>%
-  group_by(SampleID) %>%
+  # group_by(SampleID) %>%
   group_by(Region, Level) %>%
   summarise(TotalAbundance = sum(value)) %>%
   group_by(Level) %>%
@@ -206,15 +222,17 @@ devtools::install_github("gmteunisse/ggnested")
 # PARA USARLO ES NECEARIO LIMPIAR LOS HUECOS EN LA TAXONOMIA PARA QUE SEA DESCENDENTE
 library(ggnested)
 
-data(diamonds)
+# ggnested(.df, 
+#   aes(SampleID, 
+#     main_group = k, 
+#     sub_group = p)) + 
+#   geom_bar()
 
-# df %>% mutate_all()
+pal <- nested_palette(.df %>% drop_na(p), group = "k", subgroup = "p")
 
-ggnested(df, 
-  aes(SampleID, 
-    main_group = k, 
-    sub_group = p)) + 
-  geom_bar()
+pal %>% distinct(k, group_colour) %>% pull(k, name = group_colour)
+pal %>% distinct(p, subgroup_colour) %>% pull(p, name = subgroup_colour)
+
 
 devtools::install_github("gmteunisse/fantaxtic")
 require("fantaxtic")

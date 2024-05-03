@@ -4,9 +4,11 @@
 library(tidyverse)
 library(phyloseq)
 
-wd <- "~/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
+# wd <- "~/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
 
-ps <- read_rds(paste0(wd, "phyloseq.rds"))
+wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/raw-seqs-bkp/filtN/cutadapt/Illumina/filterAndTrim/"
+
+ps <- read_rds(paste0(wd, "ps.rds"))
 
 # read_tsv(list.files(path = wd, pattern = "mapping-file-corregido.tsv", full.names = T)) 
 
@@ -71,6 +73,7 @@ P <- sample_cor_long %>%
   labs(x = '', y = '') +
   theme(
     legend.position = "bottom",
+    axis.ticks.length = unit(1.5, "pt"),
     # axis.text.x = element_blank(),
     # axis.ticks.x = element_blank(),
     axis.text.x = element_text(angle = 90, hjust = 1, size = 1.5),
@@ -104,16 +107,20 @@ TOPDF <- sample_cor_long %>%
 
 
 topplot <- TOPDF %>%
-  ggplot(aes(y = y, x = KEYID, color = as.factor(Region))) +
-  geom_point(shape = 15, size = 1.5) +
+  ggplot(aes(y = factor(y), x = KEYID, fill = as.factor(Region))) +
+  # geom_point(shape = 15, size = 1, aes(color = as.factor(Region))) +
+  geom_tile(colour="white", linewidth = 0.05) + coord_equal(ratio = 4) +
   #geom_text(aes(label = label),  vjust = -0.7, hjust = 0.5, size = 1.5, family =  "GillSans", color = "#d73027") +
   ggh4x::scale_x_dendrogram(hclust = hc_samples, position = 'top', labels = NULL) +
-  # ggh4x::guide_dendro()
   # guides(x.sec = guide_axis_manual(labels = hc_order, label_size = 3.5)) +
-  guides(color = guide_legend(title = "", ncol = 4 )) +
+  guides(fill = guide_legend(title = "", ncol = 4 )) +
   theme_bw(base_family = "GillSans", base_size = 7) +
   scale_color_manual(values = axis_col ) +
+  scale_fill_manual(values = axis_col ) +
   theme(legend.position = 'top',
+        legend.key.width = unit(0.2, "cm"),
+        legend.key.height = unit(0.2, "cm"),
+        axis.ticks.length = unit(1.5, "pt"),
         panel.border = element_blank(), 
         plot.background = element_rect(fill='transparent', color = 'transparent'),
         plot.margin = unit(c(0,0,0,0), "pt"),
@@ -125,9 +132,9 @@ topplot <- TOPDF %>%
 
 library(patchwork)
 
-psave <- topplot/ plot_spacer() /P + plot_layout(heights = c(0.6, -0.5, 5))
+psave <- topplot/ plot_spacer() /P + plot_layout(heights = c(0.5, -0.5, 5))
 
-ggsave(psave, filename = 'samples-heatmap.png', path = wd, width = 4, height = 4.5, device = png, dpi = 500)
+ggsave(psave, filename = 'samples-heatmap.png', path = wd, width = 4.5, height = 4.5, device = png, dpi = 500)
 
 
 # color_vector <- as.character(unique(MTD$Region))

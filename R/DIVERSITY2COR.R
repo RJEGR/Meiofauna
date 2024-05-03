@@ -9,6 +9,9 @@ if(!is.null(dev.list())) dev.off()
 
 options(stringsAsFactors = FALSE, readr.show_col_types = FALSE)
 
+library(tidyverse)
+library(phyloseq)
+
 wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/raw-seqs-bkp/filtN/cutadapt/Illumina/filterAndTrim/"
 
 
@@ -21,6 +24,7 @@ vars_to_numeric <- c("Depth","Latitude",	"Longitude",
 
 measures <- c("Observed", "Chao1", "Shannon", "InvSimpson", "Evenness")
 
+reg_levels <- c("Deep-sea", "NW Slope", "NW Shelf", "Yucatan")
 
 R <- R %>% as_tibble() %>% mutate_at(c(vars_to_numeric, measures), as.numeric) 
 
@@ -90,9 +94,10 @@ up = ceiling(max(cor_df$cor))
 mid = (lo + up)/2
 
 cor_df %>%
+  mutate(var1 = factor(var1, levels = vars_to_numeric)) %>%
   # mutate(cor = ifelse(p <.05, NA, cor)) %>%
   ggplot(aes(y = var1, x = var2, fill = cor)) +
-  geom_tile(color = "black") +
+  geom_tile(color = 'white', size = 0.7, width = 1) +
   scale_fill_gradient2(low = "red", high = "blue", mid = "white", 
     na.value = "white", midpoint = mid, limit = c(lo, up),
     name = NULL) +
@@ -102,11 +107,13 @@ cor_df %>%
   theme_minimal(base_size = 14, base_family = "GillSans") +
   theme(plot.title = element_text(hjust = 0.5),
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, 
-      margin = unit(c(t = 0.5, r = 0, b = 0, l = 0), "mm")))
+      margin = unit(c(t = 0.5, r = 0, b = 0, l = 0), "mm"))) -> p
 
 
+ggsave(p, filename = 'alpha_diversity_cor.png', path = wd, width = 3.5, height = 5, device = png, dpi = 300)
 
-cor_out %>%
+
+cor_df %>%
   filter(var1 == "Shannon") %>% 
   filter(var2 != "Shannon") %>% 
   distinct(cor, .keep_all = T) %>%
@@ -135,4 +142,21 @@ cor_out %>%
 #   group_by(Batch) %>% cor_test(vars = "Nominal", vars2 = c("Input"))
 
 
+# scatterplot of signif
 
+
+filt_var <- cor_df %>% filter(star != "") %>% distinct(var1) %>% pull()
+
+R %>%
+  select(c(measures, vars_to_numeric)) %>%
+  pivot_longer(cols = vars_to_numeric, names_to = "vars", values_to = "val_var") %>%
+  drop_na(val_var) %>%
+  filter(vars %in% filt_var) %>%
+  # pivot_longer(cols = vars_to_numeric, names_to = "vars") %>%
+  # mutate(name = factor(name, levels = measures))%>% 
+  # mutate(x = TOC) %>%
+  ggplot(aes(x = val_var, y = Shannon)) +
+  facet_wrap(~ vars, scales = "free_x", nrow = 1) +
+  geom_smooth(method = "lm", se = T, color = 'black', formula = y ~ x) +
+  geom_point(alpha = 0.5, size = 0.5) +
+  ggpubr::stat_cor(color = 'black')

@@ -8,8 +8,9 @@ if(!is.null(dev.list())) dev.off()
 
 options(stringsAsFactors = FALSE, readr.show_col_types = FALSE)
 
-wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
+# wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/"
 
+wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/raw-seqs-bkp/filtN/cutadapt/Illumina/filterAndTrim/"
 
 library(phyloseq)
 library(microbiome)
@@ -18,13 +19,13 @@ library(flashClust)
 library(tidyverse)
 
 
-phyloseq <- read_rds(paste0(wd, '/phyloseq.rds'))
+phyloseq <- read_rds(paste0(wd, '/ps.rds'))
 
 datExpr <- phyloseq %>%
   # subset_samples(Tissue=="Foregut") %>%
   prune_samples(sample_sums(.) > 0, .) %>%
   prune_taxa(taxa_sums(.) > 0, .) %>%
-  aggregate_taxa(., "p") %>% # p tax level perform good results
+  # aggregate_taxa(., "p") %>% # p tax level perform good results
   # transform_sample_counts(., function(x) x / sum(x)) %>%
   otu_table() %>%
   as("matrix")
@@ -89,17 +90,22 @@ sft = pickSoftThreshold(datExpr,
 
 # sft <- read_rds(paste0(path, 'SoftThreshold_',cor_method, '.rds'))
 
+# Soft thresholding power was set at X, which was the minimum value for the scale-free topology fit reaching R2 = 0.9.
+
 soft_values <- abs(sign(sft$fitIndices[,3])*sft$fitIndices[,2])
 
 soft_values <- round(soft_values, digits = 2)
 
 # hist(soft_values)
 
-power_pct <- quantile(soft_values, probs = 0.95)
+# power_pct <- quantile(soft_values, probs = 0.95)
+
+power_pct <- soft_values[which.max(soft_values)]
+
 
 softPower <- sft$fitIndices[,1][which(soft_values >= power_pct)]
 
-meanK <- sft$fitIndices[softPower,5]
+meanK <- sft$fitIndices[softPower, 5]
 
 # hist(sft$fitIndices[,5])
 
@@ -108,10 +114,12 @@ softPower <- min(softPower)
 cat("\nsoftPower value", softPower, '\n')
 
 
-title1 = 'Scale Free Topology Model Fit,signed R^2'
+title1 = 'Scale Free Topology Model Fit, R^2'
 title2 = 'Mean Connectivity'
 
 caption = paste0("Lowest power for which the scale free topology index reaches the ", power_pct*100, " %")
+
+sft$fitIndices$mean.k.
 
 sft$fitIndices %>% 
   mutate(scale = -sign(slope)*SFT.R.sq) %>%
@@ -120,12 +128,12 @@ sft$fitIndices %>%
   ggplot(aes(y = Power, x = value)) +
   geom_text(aes(label = Power), size = 2) +
   geom_abline(slope = 0, intercept = softPower, linetype="dashed", alpha=0.5) +
-  # geom_vline(xintercept = min(meanK), linetype="dashed", alpha=0.5) +
+  geom_vline(xintercept = min(meanK), linetype="dashed", alpha=0.5) +
   labs(y = 'Soft Threshold (power)', x = '', 
        caption = caption) +
   facet_grid(~name, scales = 'free_x', switch = "x") +
   # scale_x_continuous(position = "top") +
-  theme_light(base_family = "GillSans",base_size = 16) -> psave
+  theme_bw(base_family = "GillSans",base_size = 16) -> psave
 
 psave
 
@@ -160,19 +168,21 @@ dev.off()
 plot(geneTree, xlab="", sub="", 
      main= "Gene Clustering on TOM-based dissimilarity", labels= FALSE, hang=0.04)
 
-# This sets the minimum number of genes to cluster into a module
+# This sets the minimum number of rows to cluster into a module
 
-minClusterSize <- 10 
+# minClusterSize <- 10 
 
-cutHeight <- 0.99
+# Using the median or mean k
+minClusterSize <- abs(sft$fitIndices[softPower, 5])
 
-dynamicMods <- cutreeDynamic(dendro= geneTree, 
-                             distM = dissTOM,
-                             method = "hybrid",
-                             deepSplit = 1, 
-                             cutHeight = cutHeight,
-                             pamRespectsDendro = FALSE,
-                             minClusterSize = minClusterSize)
+# Module identification using dynamic tree cut
+
+dynamicMods = cutreeDynamic(dendro = geneTree, distM = dissTOM,
+  deepSplit = 2, pamRespectsDendro = FALSE,
+  minClusterSize = minClusterSize)
+
+length(table(dynamicMods))
+
 
 dynamicColors = labels2colors(dynamicMods)
 names(dynamicColors) <- colnames(datExpr)
@@ -186,11 +196,17 @@ MEDiss= 1 - cor(MEs)
 
 METree = flashClust(as.dist(MEDiss), method= "average")
 
-# Set a threhold for merging modules. In this example we are not merging so MEDissThres=0.0
+plot(METree, main = "Clustering of module eigengenes",
+  xlab = "", sub = "")
+  
 
-MEDissThres = 0.99
+# Now we will see if any of the modules should be merged. I chose a height cut of 0.30, corresponding to a similarity of 0.70 to merge:
 
-merge = mergeCloseModules(datExpr, dynamicColors, cutHeight= MEDissThres, verbose =3)
+MEDissThres = 0.3
+
+abline(h=MEDissThres, col = "red")
+
+merge = mergeCloseModules(datExpr, dynamicColors, cutHeight = MEDissThres, verbose = 3)
 
 mergedColors = merge$colors
 
@@ -199,9 +215,10 @@ mergedMEs = merge$newMEs
 #plot dendrogram with module colors below it
 plotDendroAndColors(geneTree, dynamicColors, c("Modules"), dendroLabels= FALSE, hang=0.03, addGuide= TRUE, guideHang=0.05)
 
-caption <- c("Dynamic Tree Cut", "Merged dynamic", "\n(cutHeight: ", cutHeight,")")
+caption <- c("Dynamic Tree Cut", "Merged dynamic", "\n(cutHeight: ", MEDissThres,")")
 
-plotDendroAndColors(geneTree, cbind(dynamicColors, mergedColors), caption, dendroLabels= FALSE, hang=0.03, addGuide= TRUE, guideHang=0.05)
+plotDendroAndColors(geneTree, cbind(dynamicColors, mergedColors), 
+  caption, dendroLabels= FALSE, hang=0.03, addGuide= TRUE, guideHang=0.05)
 
 moduleColors <- mergedColors
 
@@ -234,14 +251,33 @@ diag(plotTOM) = NA
 
 #
 
-datTraits <- phyloseq %>% sample_data() %>% with(., table(LIBRARY_ID, Region))
+# datTraits <- phyloseq %>% sample_data() %>% with(., table(LIBRARY_ID, Region))
 
-# datTraits <- phyloseq %>% sample_data() %>% as(., "matrix")
+vars_to_numeric <- c("Depth","Latitude",	"Longitude", 
+  "Clay",	"Silt",	"Sand",	"IC",	"TOC",	"CN",	"Oxygen", 
+  "Finas",	"Medias",	"Muy_finas",	"Gruesas")
+
+
+# measures <- c("Observed", "Chao1", "Shannon", "InvSimpson", "Evenness")
+
+
+datTraits <- phyloseq %>% sample_data() %>% as(., "matrix")
+
+as.zero <- function(x) { ifelse(is.na(x), 0, x)}
+
+datTraits <- datTraits %>% as_tibble(rownames = "rows") %>% 
+  mutate_at(c(vars_to_numeric), as.numeric) %>%
+  mutate_at(c(vars_to_numeric), as.zero) %>%
+  data.frame(row.names = "rows") %>%
+  select(all_of(c(vars_to_numeric)))
 
 identical(rownames(datExpr), rownames(datTraits))
 
 # Recalculate MEs with color labels
 
+
+readr::write_rds(list("TOM" = TOM, "moduleColors" = moduleColors, "datExpr" = datExpr), 
+  file = file.path(wd, "WGCNA.rds"))
 
 MEs0 = moduleEigengenes(datExpr, moduleColors)$eigengenes
 
@@ -264,11 +300,22 @@ moduleTraitPvalue %>% as_tibble(rownames = 'module') %>%
 
 hclust <- hclust(dist(moduleTraitCor), "complete")
 
+hc_order <- hclust$labels[hclust$order]
+
 df1 %>%
   mutate(star = ifelse(corPvalueStudent <.001, "***", 
                        ifelse(corPvalueStudent <.01, "**",
                               ifelse(corPvalueStudent <.05, "*", "")))) -> df1
 
+
+
+df1 <- df1 %>% mutate(name = factor(name, levels = vars_to_numeric))
+
+lo = floor(min(df1$moduleTraitCor))
+up = ceiling(max(df1$moduleTraitCor))
+mid = (lo + up)/2
+
+library(ggh4x)
 
 df1 %>%
   mutate(moduleTraitCor = round(moduleTraitCor, 2)) %>%
@@ -277,12 +324,14 @@ df1 %>%
   ggplot(aes(y = module, x = name, fill = moduleTraitCor)) +
   geom_tile(color = 'white', size = 0.7, width = 1) +
   # geom_raster() +
-  geom_text(aes(label = star),  vjust = 0.5, hjust = 0.5, size= 4, family =  "GillSans") +
-  ggsci::scale_fill_gsea(name = "", reverse = T, na.value = "white") +
-  # scale_fill_viridis_c(name = "Membership", na.value = "white") +
-  ggh4x::scale_y_dendrogram(hclust = hclust) +
+  geom_text(aes(label = star),  vjust = 0.5, hjust = 0.5, size= 2.5, family =  "GillSans") +
+  scale_fill_gradient2(low = "red", high = "blue", mid = "white", 
+    na.value = "white", midpoint = mid, limit = c(lo, up),
+    name = NULL) +
+  ggh4x::scale_y_dendrogram(hclust = hclust, position = "left", labels = NULL) +
+  guides(y.sec = guide_axis_manual(labels = hc_order, label_size = 10, label_family = "GillSans")) +
   labs(x = '', y = 'Module') +
-  guides(fill = guide_colorbar(barwidth = unit(3.5, "in"),
+  guides(fill = guide_colorbar(barwidth = unit(5, "in"),
                                barheight = unit(0.1, "in"), label.position = "top",
                                alignd = 0.5,
                                ticks.colour = "black", ticks.linewidth = 0.5,
@@ -296,11 +345,15 @@ p1 <- p1 + theme(
   axis.line.x = element_blank(),
   axis.line.y = element_blank(),
   axis.text.y = element_text(hjust = 1.2),
-  axis.ticks.length = unit(5, "pt"))
+  axis.ticks.length = unit(5, "pt"),
+  axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, 
+    margin = unit(c(t = 0.5, r = 0, b = 0, l = 0), "mm")))
 
 p1 <- p1 + theme(panel.spacing.x = unit(-0.5, "mm"))
 
-p1
+# p1
+
+ggsave(p1, filename = 'moduleTraitCor.png', path = wd, width = 8, height = 8, device = png, dpi = 300)
 
 # BARPLOT
 
@@ -318,6 +371,11 @@ data.frame(reads, moduleColors) %>%
   summarise(n = n(), reads = sum(reads)) %>%
   dplyr::rename('module' = 'moduleColors') -> stats
 
+hc_order
+
+stats %>% pull(n, name = module)
+
+
 p2 <- stats %>% 
   mutate(module = factor(module, levels = hclust$labels[hclust$order])) %>%
   ggplot(aes(y = module)) + #  fill = DE, color = DE
@@ -333,7 +391,9 @@ p2 <- stats %>%
         axis.ticks.y =element_blank(), 
         axis.line.y = element_blank(),
         axis.line.x = element_blank(),
-        axis.ticks.length = unit(5, "pt"))
+        axis.ticks.length = unit(5, "pt"),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, 
+      margin = unit(c(t = 0.5, r = 0, b = 0, l = 0), "mm")))
 
 
 library(patchwork)
@@ -343,5 +403,8 @@ library(patchwork)
 psave <- p1 +  plot_spacer() + p2 + plot_layout(widths = c(7, -0.25, 1.5)) + labs(caption = '* corPvalueStudent < 0.05 ') 
 
 psave
+
+
+
 
 
