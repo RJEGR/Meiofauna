@@ -54,6 +54,10 @@ reg_levels <- c("Deep-sea", "NW Slope", "NW Shelf", "Yucatan")
   mutate(SampleID = KEYID.x) %>%
   filter(!grepl("CHAPO",SampleID ))
 
+.df %>% filter(k %in% "Plantae") %>% group_by(p) %>% summarise(n = n(), N = sum(value))
+  
+.df <- .df %>% filter(!k %in% "Plantae")
+
 filter_df <- function(df, agglom_lev = "k", low_ab = 0.01) {
   
   recode_to <- c(`ZZLow` = "Low abundance", `ZZNo hit` = "No hit")
@@ -160,7 +164,7 @@ ggsave(ps, path = wd, filename = 'barplot_k_2.png',
   device = png, 
        width = 12, height = 6)
 
-barTax(dvz, agglom_lev = "p", low_ab = 0.01)
+barTax(.df, agglom_lev = "p", low_ab = 0.1)
 
 # dvz <- .df %>% mutate(p = ifelse(as.numeric(Confidence) >= 0.5, p, "No hit"))
 
@@ -217,16 +221,25 @@ ggsave(ps, path = wd, filename = 'barplot_p.png',
 
 
 # NESTED BAR
-devtools::install_github("gmteunisse/ggnested")
+# devtools::install_github("gmteunisse/ggnested")
 # EX. https://github.com/gmteunisse/fantaxtic?tab=readme-ov-file
-# PARA USARLO ES NECEARIO LIMPIAR LOS HUECOS EN LA TAXONOMIA PARA QUE SEA DESCENDENTE
 library(ggnested)
 
-# ggnested(.df, 
-#   aes(SampleID, 
-#     main_group = k, 
-#     sub_group = p)) + 
-#   geom_bar()
+
+ps <- filter_df(.df, agglom_lev = "p", low_ab = 0) %>%
+  ggnested(
+  aes(x = SampleID,
+    main_group = k,
+    sub_group = Level)) +
+  geom_bar(aes(weight = RA)) +
+  facet_grid(~ Region, scales = "free", space = "free") +
+  theme_classic(base_size = 14, base_family = "GillSans") +
+  theme( axis.ticks.x = element_blank(),
+    axis.text.x = element_blank())
+
+ggsave(ps, path = wd, filename = 'ggnested.png', 
+  device = png, 
+  width = 12, height = 6)
 
 pal <- nested_palette(.df %>% drop_na(p), group = "k", subgroup = "p")
 

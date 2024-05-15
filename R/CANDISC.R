@@ -5,30 +5,35 @@ if(!is.null(dev.list())) dev.off()
 
 options(stringsAsFactors = FALSE, readr.show_col_types = FALSE)
 
-wd <- "~/Documents/MEIOFAUNA_PAPER/INPUTS/"
+wd <- "/Users/cigom/Documents/MEIOFAUNA_PAPER/RDADA2-OUTPUT/raw-seqs-bkp/filtN/cutadapt/Illumina/filterAndTrim/"
 
 library(tidyverse)
 
-ab_f <-  read_tsv(list.files(path = wd, pattern = 'table_100_80', full.names = T), skip = 1)
+phyloseq <- read_rds(paste0(wd, '/phyloseq.rds'))
 
-mtd <- read_tsv(list.files(path = wd, pattern = 'mapping-file-corregido.tsv', full.names = T)) %>%
+ab_f <- phyloseq %>%
+  # transform_sample_counts(., function(x) x / sum(x)) %>%
+  otu_table() %>% as("matrix") %>% as_tibble(rownames = "Feature.ID")
+
+vars_to_numeric <- c("Depth","Latitude",	"Longitude", 
+  "Clay",	"Silt",	"Sand",	"IC",	"TOC",	"CN",	"Oxygen", 
+  "Finas",	"Medias",	"Muy_finas",	"Gruesas")
+
+datTraits <- phyloseq %>% sample_data() %>% as(., "matrix")
+
+as.zero <- function(x) { ifelse(is.na(x), 0, x)}
+
+datTraits <- datTraits %>% 
+  as_tibble() %>% 
+  mutate_at(c(vars_to_numeric), as.numeric) %>%
+  mutate_at(c(vars_to_numeric), as.zero) %>%
+  # data.frame(row.names = "Feature.ID") %>%
+  select(all_of(c("LIBRARY_ID", vars_to_numeric, "Region"))) %>%
   mutate(Region = factor(Region, levels = c("Yucatan", "NW Shelf", "NW Slope", "Deep-sea")))
 
-w_mtd <- c("#SampleID", "Region") # "#SampleID","Zone", "Description", "Profundidad", "Depth", 
 
-  
-subdir <- paste0(wd, "classify-consensus-blast_dir")
 
-into <- c("k","p", "c", "o", "f", "g", "s")
-
-tax_f <- read_tsv(list.files(path = subdir, pattern = 'taxonomy.tsv$', full.names = T)) %>%
-  separate(Taxon, sep = ";", into = into) %>% 
-  mutate_at(vars(all_of(into)), list(~ str_replace_all(., c("[a-z]__" = "", "Unassigned"=NA_character_)))) %>%
-  mutate_at(vars(all_of(into)), list(~ gsub("[[:space:]]", "", .))) %>%
-  mutate_at(vars(all_of(into)),  ~na_if(., ""))
- 
-
-# tax_gr_df <- read_csv(list.files(path = wd, pattern = 'RELEVANT_TAXON_GROUPS', full.names = T)) %>% select(Clade, Label)
+tax_f <- phyloseq %>% tax_table() %>% as(., "matrix") %>% as_tibble()
 
 # 1) Input Taxa-groups list ----
 
@@ -67,40 +72,39 @@ METAZOAN <- c(
 METAZOAN <- str_to_lower(paste(METAZOAN, collapse = "|"))
 UNI_EUK <- str_to_lower(paste(UNI_EUK, collapse = "|"))
 
+
+into <- c("k", "p", "c", "o", "f", "g", "s")
+
 METAZOAN_DF <- tax_f %>%
-  mutate_at(vars(into), list(~ str_to_lower(.))) %>%
-  filter_at(vars(into), any_vars(grepl(METAZOAN, .))) %>%
-  mutate_at(vars(into), list(~ str_to_sentence(.))) %>%
+  mutate_at(vars(all_of(into)), list(~ str_to_lower(.))) %>%
+  filter_at(vars(all_of(into)), any_vars(grepl(METAZOAN, .))) %>%
+  mutate_at(vars(all_of(into)), list(~ str_to_sentence(.))) %>%
   mutate(Clade = "Metazoans")
 
 
 UNI_EUK_DF <- tax_f %>%
-  mutate_at(vars(into), list(~ str_to_lower(.))) %>%
-  filter_at(vars(into), any_vars(grepl(UNI_EUK, .))) %>%
-  mutate_at(vars(into), list(~ str_to_sentence(.))) %>%
+  mutate_at(vars(all_of(into)), list(~ str_to_lower(.))) %>%
+  filter_at(vars(all_of(into)), any_vars(grepl(UNI_EUK, .))) %>%
+  mutate_at(vars(all_of(into)), list(~ str_to_sentence(.))) %>%
   mutate(Clade = "Unicellular eukaryotes")
 
-tax_f <- rbind(METAZOAN_DF,UNI_EUK_DF)
+.tax_f <- select(rbind(METAZOAN_DF,UNI_EUK_DF), Feature.ID, Clade)
+
+tax_f <- tax_f %>% left_join(.tax_f, by = "Feature.ID")
 
 # Color scale ----
 
-color_vector <- as.character(unique(mtd$Region))
-
-n <- length(color_vector)
-# getPalette <- RColorBrewer::brewer.pal(n, 'Set1')
-
-getPalette <- c("#4DAF4A", "#313695", "lightblue", "#E41A1C")
-
-
-axis_col <- structure(getPalette, names = color_vector)
+reg_levels <- c("Deep-sea", "NW Slope", "NW Shelf", "Yucatan")
+getPalette <- c("#000056", "#2E71A7","#60A4CF", "#9ECAE1")
+axis_col <- structure(getPalette, names = reg_levels)
 
 # axis_col[names(axis_col) %in% "Deep-sea"] <- "#313695"
 
 
 as_tibble(axis_col, rownames = "Region") %>%
   rename("axis_col" = "value") %>%
-  right_join(mtd, by = "Region", multiple = "all") %>% 
-  pull(axis_col, name = `#SampleID`) -> true_species_cols
+  right_join(datTraits, by = "Region", multiple = "all") %>% 
+  pull(axis_col, name = LIBRARY_ID) -> true_species_cols
 
 
 # mtd %>% view()
@@ -109,44 +113,54 @@ as_tibble(axis_col, rownames = "Region") %>%
 
 # https://www.davidzeleny.net/anadat-r/doku.php/en:pca_r
 
-agglom_lev <- "k"
+agglom_lev <- "p"
 
-which_sam <- ab_f %>% select_if(is.double) %>% names()
+which_sam <- colnames(ab_f)
 
 # 1) Agglomerate data (best solution)
 
 data <- ab_f %>% 
-  right_join(tax_f, by = "Feature ID") %>%
+  right_join(tax_f, by = "Feature.ID") %>%
   # filter(Clade %in% "Metazoans") %>%
   rename( "Level" = agglom_lev) %>%
   group_by(Level) %>% 
-  summarise_at(vars(all_of(which_sam)), sum) %>%
-  drop_na(Level) %>% 
+  # summarise_at(vars(all_of(which_sam)), sum) %>%
+  summarise_if(is.integer, sum) %>%
+  mutate(Level = ifelse(is.na(Level), "No hit", Level)) %>%
+  # drop_na(Level) %>% 
   data.frame(., row.names = .$Level) %>%
   select(-Level)
+
+data <- apply(data, 2, function(x) x / sum(x))
+
+# data <- vegan::rarefy(data, min(rowSums(data)))
+
+colSums(data)
 
 # data <- vegan::decostand(data, method = "hellinger") # chord or hellinger
 
 # data <- vegan::rda(data)
 
-set.seed(202305)
+set.seed(202405)
 
-mMDS <- vegan::metaMDS(data, distance = "bray", k = 2, trymax = 1000)
+mMDS <- vegan::metaMDS(t(data), distance = "bray", k = 2, trymax = 1000)
 
 # cca_df <- vegan::cca(data, )
 
 
 # vegan::stressplot(mMDS)
   
+w_mtd <- c("LIBRARY_ID", "Region") # "LIBRARY_ID","Zone", "Description", "Profundidad", "Depth", 
+
 vegan::scores(mMDS, tidy = T) %>% 
-  as_tibble() %>% 
-  mutate(`#SampleID` = gsub("[.]","-", label)) %>% 
-  filter(!score %in% 'sites') %>%
-  left_join(mtd %>% select(all_of(w_mtd))) -> MDSdf
+  as_tibble(rownames = "LIBRARY_ID") %>% 
+  mutate(`LIBRARY_ID` = gsub("[.]","-", LIBRARY_ID)) %>% 
+  filter(score %in% 'sites') %>%
+  left_join(datTraits) -> MDSdf
 
 vegan::scores(mMDS, tidy = T) %>% 
   as_tibble() %>% 
-  filter(score %in% 'sites') -> MDSdf_sp
+  filter(!score %in% 'sites') -> MDSdf_sp
 
 ggplot() +
   geom_point(data = MDSdf, aes(x = NMDS1, y = NMDS2, color = Region), size = 5, alpha = 0.7) +
@@ -163,16 +177,19 @@ ggplot() +
 
 tax_f %>% count(Clade)
 
+# #SampleID to LIBRARY_ID
+# Feature ID to Feature.ID
+
 PCA_out <- function(ab_f, w_clade = ...) {
   
   data <- ab_f %>%
-    right_join(tax_f, by = "Feature ID") %>%
+    right_join(tax_f, by = "Feature.ID") %>%
     filter(Clade %in% w_clade) %>%
     # rename( "Level" = agglom_lev) %>%
     # drop_na(Level) %>%
-    # mutate_at(vars(all_of(which_sam)), function(x) {1E6 * x/sum(x)}) %>%
-    select_at(vars(all_of(which_sam), `Feature ID`)) %>%
-    data.frame(., row.names = .$`Feature ID`) %>%
+    mutate_at(vars(all_of(which_sam)), function(x) {1E6 * x/sum(x)}) %>%
+    select_at(vars(all_of(which_sam), `Feature.ID`)) %>%
+    data.frame(., row.names = .$`Feature.ID`) %>%
     select(-`Feature.ID`)
   
 
@@ -185,9 +202,9 @@ PCA_out <- function(ab_f, w_clade = ...) {
   PCAdf <- data.frame(PC1 = PCA$x[,1], PC2 = PCA$x[,2])
   
   PCAdf %>%
-    mutate(`#SampleID` = rownames(.)) %>%
-    mutate(`#SampleID` = gsub("[.]","-", `#SampleID`)) %>%
-    left_join(mtd %>% select(all_of(w_mtd))) %>%
+    mutate(`LIBRARY_ID` = rownames(.)) %>%
+    mutate(`LIBRARY_ID` = gsub("[.]","-", `LIBRARY_ID`)) %>%
+    left_join(datTraits, by = "LIBRARY_ID") %>%
     mutate(Clade = w_clade) -> PCAdf
   
   
@@ -205,7 +222,7 @@ PCA_out <- function(ab_f, w_clade = ...) {
     scale_color_manual(values = axis_col)
   
   
-  # return(PCAdf)
+  return(PCAdf)
   
 }
 
@@ -216,6 +233,8 @@ p2 <- PCA_out(ab_f, w_clade = "Metazoans")
 library(patchwork)
  
 psave <- p1 + p2 + plot_layout(guides = "collect") & theme(legend.position = 'top')
+
+psave
 
 ggsavepath <- paste0(wd, '/Figures/')
 
@@ -272,23 +291,48 @@ legend("topleft", legend = names(axis_col), fill = axis_col)
 
 
 # candisc canonical discriminant analysis (CDA) -----
+library(candisc)
 
+w_cols <- ab_f %>% select_if(is.integer) %>% names()
 
-w_cols <- ab_f %>% select_if(is.double) %>% names()
-
+agglom_lev <- "p" 
+  
 ab_f %>%
-  left_join(tax_f, by = "Feature ID") %>% 
-  filter(Clade %in% "Metazoans") %>%
-  pivot_longer(cols = all_of(w_cols), names_to = "#SampleID") %>%
+  left_join(tax_f, by = "Feature.ID") %>% 
+  # filter(Clade %in% "Metazoans") %>%
+  pivot_longer(cols = all_of(w_cols), names_to = "LIBRARY_ID") %>%
   filter(value > 0) %>%
-  left_join(mtd %>% select(all_of(w_mtd))) %>%
-  group_by(Region, p) %>% 
-  summarise(value = sum(value)) %>% 
-  mutate(value = log2(value + 1)) %>%
+  left_join(datTraits) %>%
+  rename( "Level" = agglom_lev) %>%
+  group_by(Region, Level) %>% 
+  summarise(value = sum(value)) %>%
+  mutate(Level = ifelse(is.na(Level), "No hit", Level)) %>%
+  # mutate(value = log2(value + 1)) %>%
   mutate(value = as.numeric(value)) %>%
-  pivot_wider(names_from = p, values_from = value, values_fill = 0) %>%
-  # pivot_wider(names_from = Region, values_from = value, values_fill = 0) %>%
+  # pivot_wider(names_from = p, values_from = value, values_fill = 0) %>%
+  pivot_wider(names_from = Region, values_from = value, values_fill = 0) %>%
   ungroup() -> dat
+
+dat <- dat %>%
+  data.frame(., row.names = .$Level) %>%
+  select(-Level)
+
+dat <- apply(dat, 2, function(x) x / sum(x))
+
+# dat <- round(dat)
+
+colSums(dat)
+
+dat <- dat %>% data.frame(p = rownames(.), .)
+
+mod <- lm(cbind(`Yucatan`,`NW.Shelf`,`NW.Slope`, `Deep.sea`) ~  p, data=dat)
+
+manova <- Anova(mod, type = as.character(2))
+
+can <- candisc(mod, data = dat)
+
+
+manova <- Anova(mod, type = as.character(2))
 
 
 is.na(dat)
@@ -301,7 +345,8 @@ library(candisc)
 
 iris.mod <- lm(cbind(Petal.Length, Sepal.Length, Petal.Width, Sepal.Width) ~ Species, data=iris)
 iris.can <- candisc(iris.mod, data=iris)
-
+# plot(iris.can, col=col, pch=pch)
+heplot(iris.can)
 
 
 depVars <- dat %>% select_if(is.double) %>% names()
@@ -314,6 +359,8 @@ form <- formula(paste('cbind(',
   paste(indepVars, collapse = '+')))
 
 mod <- lm(form, data=dat, na.action=na.exclude)
+
+mod <- lm("Loukozoa ~ Region", data=dat, na.action=na.exclude)
 
 # mod <- lm(cbind(Yucatan, `NW Shelf`, `NW Slope`,`Deep-sea`) ~  p, data=dat)
 
@@ -328,9 +375,9 @@ can <- candisc(mod, data = dat, term = 'Region', ndim = "2")
 
 can <- candisc(mod, data = dat, term = 'p', ndim = "2")
 
+mod <- lm(cbind(`Annelida`,`Arthropoda`,`Bryozoa`, `Cnidaria`) ~  Region, data=dat)
 
-
-# mod <- lm(cbind(`Annelida`,`Arthropoda`,`Bryozoa`,`Cephalochordata`, `Cnidaria`) ~  Region, data=dat)
+can <- candisc(mod, data = dat)
 
 
 

@@ -97,8 +97,8 @@ cor_df %>%
   mutate(var1 = factor(var1, levels = vars_to_numeric)) %>%
   # mutate(cor = ifelse(p <.05, NA, cor)) %>%
   ggplot(aes(y = var1, x = var2, fill = cor)) +
-  geom_tile(color = 'white', size = 0.7, width = 1) +
-  scale_fill_gradient2(low = "red", high = "blue", mid = "white", 
+  geom_tile(color = 'black', linewidth = 0.7, width = 1) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
     na.value = "white", midpoint = mid, limit = c(lo, up),
     name = NULL) +
   geom_text(aes(label = star), size = 4) +

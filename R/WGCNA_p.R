@@ -1,6 +1,5 @@
 # GENERATE NETWORK ANALYSIS USING WGCNA
-# EX. https://www.polarmicrobes.org/weighted-gene-correlation-network-analysis-wgcna-applied-to-microbial-communities/
-# use also Sparse Estimation of Correlations among Microbiomes (SECOM) for correlation analysis. 
+# 
 
 rm(list = ls())
 
@@ -19,31 +18,37 @@ library(flashClust)
 library(tidyverse)
 
 
-phyloseq <- read_rds(paste0(wd, '/ps.rds'))
+ps <- read_rds(paste0(wd, '/ps.rds'))
 
-datExpr <- phyloseq %>%
-  # subset_samples(Tissue=="Foregut") %>%
-  prune_samples(sample_sums(.) > 0, .) %>%
-  prune_taxa(taxa_sums(.) > 0, .) %>%
-  # aggregate_taxa(., "p") %>% # p tax level perform good results
-  # transform_sample_counts(., function(x) x / sum(x)) %>%
-  otu_table() %>%
-  as("matrix")
+rank_names(ps)
+
+ab_f <- ps %>% otu_table() %>% 
+  as("matrix") %>% as_tibble(rownames = "Feature.ID")
+  
+tax_f <- ps %>% tax_table() %>% as(., "matrix") %>% as_tibble()
+
+which_sam <- colnames(ab_f)
+
+# 1) Agglomerate data (best solution)
+
+agglom_lev <- "c"
 
 
+datExpr <- ab_f %>% 
+  right_join(tax_f, by = "Feature.ID") %>%
+  rename( "Level" = all_of(agglom_lev)) %>%
+  mutate(Level = ifelse(as.double(Confidence) > 0.8, Level, NA)) %>%
+  mutate(Level = ifelse(is.na(Level), "No hit", Level)) %>%
+  group_by(Level) %>% 
+  # summarise_at(vars(all_of(which_sam)), sum) %>%
+  summarise_if(is.integer, sum) %>%
+  # drop_na(Level) %>% 
+  data.frame(., row.names = .$Level) %>%
+  select(-Level)
+
+dim(datExpr)
 
 datExpr <- t(datExpr) # log2(count+1) # 
-
-sampleTree = hclust(dist(datExpr), method = "average");
-
-sizeGrWindow(12,9)
-
-par(cex = 0.6);
-par(mar = c(0,4,2,0))
-
-plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5, cex.axis = 1.5, cex.main = 2)
-
-# The sample dendrogram does show X3-47 obvious outliers so I may remove or not this samples. If you need to remove some samples then you have to follow some code.
 
 str(datExpr)
 
@@ -62,12 +67,6 @@ if (!gsg$allOK) {
 }
 
 # When you have a lot of rows in the matrix (ex. genes or taxons) use the following code
-k=softConnectivity(datE=datExpr,power=6)
-# Plot a histogram of k and a scale free topology plot
-sizeGrWindow(10,5)
-par(mfrow=c(1,2))
-hist(k)
-scaleFreePlot(k, main="Check scale free topology\n")
 
 max_power <- 30
 
@@ -82,23 +81,17 @@ cor_method =  "cor" # by default WGCNA::cor(method =  'pearson') is used, "bicor
 corOptionsList = list(use ='p') # maxPOutliers = 0.05, blocksize = 20000
 
 sft = pickSoftThreshold(datExpr, 
-                        powerVector = powers, 
-                        corFnc = cor_method,
-                        corOptions = corOptionsList,
-                        verbose = 5, 
-                        networkType = "unsigned")
+  powerVector = powers, 
+  corFnc = cor_method,
+  corOptions = corOptionsList,
+  verbose = 5, 
+  networkType = "unsigned")
 
-# sft <- read_rds(paste0(path, 'SoftThreshold_',cor_method, '.rds'))
 
-# Soft thresholding power was set at X, which was the minimum value for the scale-free topology fit reaching R2 = 0.9.
 
 soft_values <- abs(sign(sft$fitIndices[,3])*sft$fitIndices[,2])
 
 soft_values <- round(soft_values, digits = 2)
-
-# hist(soft_values)
-
-# power_pct <- quantile(soft_values, probs = 0.95)
 
 power_pct <- soft_values[which.max(soft_values)]
 
@@ -130,7 +123,7 @@ sft$fitIndices %>%
   geom_abline(slope = 0, intercept = softPower, linetype="dashed", alpha=0.5) +
   geom_vline(xintercept = min(meanK), linetype="dashed", alpha=0.5) +
   labs(y = 'Soft Threshold (power)', x = '', 
-       caption = caption) +
+    caption = caption) +
   facet_grid(~name, scales = 'free_x', switch = "x") +
   # scale_x_continuous(position = "top") +
   theme_bw(base_family = "GillSans",base_size = 16) -> psave
@@ -147,8 +140,8 @@ enableWGCNAThreads()
 # softPower <- 30 # if asvs level
 
 adjacency <- adjacency(datExpr, 
-                       power = softPower, 
-                       type = "unsigned")
+  power = softPower, 
+  type = "unsigned")
 
 
 TOM <- TOMsimilarity(adjacency, TOMType = "unsigned") # specify network type
@@ -166,14 +159,14 @@ geneTree = flashClust(as.dist(dissTOM), method="average")
 dev.off()
 
 plot(geneTree, xlab="", sub="", 
-     main= "Gene Clustering on TOM-based dissimilarity", labels= FALSE, hang=0.04)
+  main= "Gene Clustering on TOM-based dissimilarity", labels= FALSE, hang=0.04)
 
 # This sets the minimum number of rows to cluster into a module
 
-# minClusterSize <- 10 
+minClusterSize <- 1
 
 # Using the median or mean k
-minClusterSize <- abs(sft$fitIndices[softPower, 5])
+# minClusterSize <- abs(sft$fitIndices[softPower, 5])
 
 # Module identification using dynamic tree cut
 
@@ -187,8 +180,8 @@ length(table(dynamicMods))
 dynamicColors = labels2colors(dynamicMods)
 names(dynamicColors) <- colnames(datExpr)
 MEList = moduleEigengenes(datExpr, 
-                          colors= dynamicColors,
-                          softPower = softPower)
+  colors= dynamicColors,
+  softPower = softPower)
 
 MEs = MEList$eigengenes
 
@@ -198,7 +191,7 @@ METree = flashClust(as.dist(MEDiss), method= "average")
 
 plot(METree, main = "Clustering of module eigengenes",
   xlab = "", sub = "")
-  
+
 
 # Now we will see if any of the modules should be merged. I chose a height cut of 0.30, corresponding to a similarity of 0.70 to merge:
 
@@ -247,7 +240,7 @@ plotTOM = dissTOM^7
 # Set diagonal to NA for a nicer plot
 diag(plotTOM) = NA
 # Call the plot function
-# TOMplot(plotTOM, dendro = geneTree, Colors = moduleColors)
+TOMplot(plotTOM, dendro = geneTree, Colors = moduleColors)
 
 #
 
@@ -261,7 +254,7 @@ vars_to_numeric <- c("Depth","Latitude",	"Longitude",
 # measures <- c("Observed", "Chao1", "Shannon", "InvSimpson", "Evenness")
 
 
-datTraits <- phyloseq %>% sample_data() %>% as(., "matrix")
+datTraits <- ps %>% sample_data() %>% as(., "matrix")
 
 as.zero <- function(x) { ifelse(is.na(x), 0, x)}
 
@@ -269,21 +262,13 @@ datTraits <- datTraits %>% as_tibble(rownames = "rows") %>%
   mutate_at(c(vars_to_numeric), as.numeric) %>%
   mutate_at(c(vars_to_numeric), as.zero) %>%
   data.frame(row.names = "rows") %>%
-  select(all_of(c(vars_to_numeric)))
+  select(all_of(c(vars_to_numeric))) 
+
+rownames(datTraits) <- gsub("-", ".",rownames(datTraits))
 
 identical(rownames(datExpr), rownames(datTraits))
 
 # Recalculate MEs with color labels
-
-
-# readr::write_rds(list("TOM" = TOM, "moduleColors" = moduleColors, "datExpr" = datExpr), 
-#   file = file.path(wd, "WGCNA.rds"))
-
-
-x <- readr::read_rds(file.path(wd, "WGCNA.rds"))
-
-datExpr <- x$datExpr
-moduleColors <- x$moduleColors
 
 MEs0 = moduleEigengenes(datExpr, moduleColors)$eigengenes
 
@@ -310,8 +295,8 @@ hc_order <- hclust$labels[hclust$order]
 
 df1 %>%
   mutate(star = ifelse(corPvalueStudent <.001, "***", 
-                       ifelse(corPvalueStudent <.01, "**",
-                              ifelse(corPvalueStudent <.05, "*", "")))) -> df1
+    ifelse(corPvalueStudent <.01, "**",
+      ifelse(corPvalueStudent <.05, "*", "")))) -> df1
 
 
 
@@ -320,10 +305,6 @@ df1 <- df1 %>% mutate(name = factor(name, levels = vars_to_numeric))
 lo = floor(min(df1$moduleTraitCor))
 up = ceiling(max(df1$moduleTraitCor))
 mid = (lo + up)/2
-
-# add tax
-
-tax_f <- phyloseq %>% tax_table() %>% as(., "matrix") %>% as_tibble()
 
 # add module size
 
@@ -334,28 +315,13 @@ Total <- sum(reads)
 
 identical(names(colSums(datExpr)), names(moduleColors))
 
-df_alluv <- 
-  data.frame(reads, moduleColors) %>% 
-  as_tibble(rownames = "Feature.ID") %>% 
-  # add tax info 
-  right_join(tax_f, by = "Feature.ID") %>%
-  rename( "wgcna_module" = "moduleColors") %>%
-  rename( "TotalAbundance" = "reads")
-  
-readr::write_excel_csv(df_alluv, file = file.path(wd, "WGCNA.xls"))
-
-df_alluv <- df_alluv %>%
-  rename( "Level" = "p") %>%
-  mutate(Level = ifelse(is.na(Level), "No hit", Level))
-
-
-
-df_alluv %>%
+data.frame(reads, moduleColors) %>% 
+  as_tibble(rownames = "Name") %>% 
   group_by(moduleColors) %>% 
-  summarise(n = n(), n_tax = length(unique(Level)), reads = sum(reads)) %>%
+  summarise(n = n(), reads = sum(reads)) %>%
   dplyr::rename('module' = 'moduleColors') -> stats
 
-module_size <- structure(stats$n_tax, names = stats$module)
+module_size <- structure(stats$n, names = stats$module)
 
 module_size <- module_size[match(hc_order, names(module_size))]
 
@@ -381,14 +347,14 @@ df1 %>%
   guides(y.sec = guide_axis_manual(title = "Modules", labels = hc_order, label_size = 10, label_family = "GillSans")) +
   labs(x = 'Parameters', y = "") +
   guides(fill = guide_colorbar(barwidth = unit(5, "in"),
-                               barheight = unit(0.1, "in"), label.position = "top",
-                               alignd = 0.5,
-                               ticks.colour = "black", ticks.linewidth = 0.5,
-                               frame.colour = "black", frame.linewidth = 0.5,
-                               label.theme = element_text(size = 10))) +
+    barheight = unit(0.1, "in"), label.position = "top",
+    alignd = 0.5,
+    ticks.colour = "black", ticks.linewidth = 0.5,
+    frame.colour = "black", frame.linewidth = 0.5,
+    label.theme = element_text(size = 10))) +
   theme_classic(base_size = 12, base_family = "GillSans") +
   theme(legend.position = "top",
-        strip.background = element_rect(fill = 'grey89', color = 'white')) -> p1
+    strip.background = element_rect(fill = 'grey89', color = 'white')) -> p1
 
 p1 <- p1 + theme(
   axis.line.x = element_blank(),
@@ -402,50 +368,7 @@ p1 <- p1 + theme(panel.spacing.x = unit(-0.5, "mm"))
 
 # p1
 
-ggsave(p1, filename = 'moduleTraitCor_n_tax.png', path = wd, width = 8, height = 8, device = png, dpi = 300)
-
-# alluv df
-
-library(ggsankey)
-
-df_alluv_long <- df_alluv %>%
-  select(-Feature.ID, -reads, -Confidence) %>%
-  pivot_longer(cols = c("k", "Level", "c", "o", "f", "g", "s"), names_to = "key", values_to = "node") %>%
-  drop_na(node) %>%
-  group_by(moduleColors, key, node) %>%
-  count(sort = T)
-  # summarise(n = n(), reads = sum(reads)) %>%
-  # dplyr::rename('module' = 'moduleColors')
-
-pl <- ggplot(df_alluv_long, aes(x = key
-  , next_x = moduleColors
-  , node = moduleColors
-  , next_node = node
-  , fill = factor(moduleColors)
-  
-  , label = paste0(moduleColors," n=", n)
-)
-) 
-
-pl <- pl +geom_sankey(flow.alpha = 0.5, node.color = "black",show.legend = TRUE)
-pl <- pl +geom_sankey_text(size = 2, color = "blue", hjust = -0.5)
-
-
-# 
-# library(easyalluvial)
-# 
-
-# 
-# 
-# alluvial_long( df_alluv_long, key = Level, value = n, fill = module)
-# 
-# 
-# alluvial_wide( data = df_alluv_long %>% sample_n(100),
-#   # , max_variables = 5
-#   col_vector_flow = names(table(moduleColors))
-#   , fill_by = 'first_variable' ) # %>%
-#   # add_marginal_histograms(mtcars2)
-
+ggsave(p1, filename = 'moduleTraitCor_p.png', path = wd, width = 8, height = 8, device = png, dpi = 300)
 
 # BARPLOT
 
@@ -461,13 +384,13 @@ p2 <- stats %>%
   # scale_fill_manual(name = '', values = c("#303960", "#647687", "#E7DFD5")) + # grey90
   theme_classic(base_size = 14, base_family = "GillSans") +
   theme(legend.position = "top",
-        strip.background = element_rect(fill = 'grey89', color = 'white'),
-        axis.title.y = element_blank(), 
-        axis.text.y= element_blank(),
-        axis.ticks.y =element_blank(), 
-        axis.line.y = element_blank(),
-        axis.line.x = element_blank(),
-        axis.ticks.length = unit(5, "pt"),
+    strip.background = element_rect(fill = 'grey89', color = 'white'),
+    axis.title.y = element_blank(), 
+    axis.text.y= element_blank(),
+    axis.ticks.y =element_blank(), 
+    axis.line.y = element_blank(),
+    axis.line.x = element_blank(),
+    axis.ticks.length = unit(5, "pt"),
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, 
       margin = unit(c(t = 0.5, r = 0, b = 0, l = 0), "mm")))
 
